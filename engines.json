@@ -1,0 +1,16 @@
+[
+  {
+    "id": "sensor-test-alpha",
+    "name": "Sensor+Test",
+    "instruction": "Take the URL from the website.",
+    "inputType": "",
+    "category": "Specific"
+  },
+  {
+    "id": "didacta-cologne",
+    "name": "Didacta Cologne",
+    "instruction": "Provide PHPSESSID Cookie",
+    "inputType": "",
+    "category": "Specific"
+  }
+]
