@@ -352,7 +352,10 @@ app.get('/', (req, res) => {
                         <div class="flex gap-4">
                             <div class="flex-1">
                                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Category</label>
-                                <input id="upCategory" type="text" placeholder="e.g. Custom" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm">
+                                <select id="upCategory" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm appearance-none cursor-pointer text-white">
+                                    <option value="Custom">Custom</option>
+                                    <option value="General">General</option>
+                                </select>
                             </div>
                             <div class="flex-1">
                                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Input Field Name</label>
