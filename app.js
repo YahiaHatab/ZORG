@@ -177,7 +177,7 @@ app.post('/upload-engine', (req, res) => {
             name,
             instruction: instruction || '',
             inputType: inputType !== undefined ? inputType : '',
-            category: category || 'Specific'
+            category: category || 'Custom'
         };
 
         if (existingIndex >= 0) {
@@ -214,6 +214,34 @@ app.get('/engine/:id', (req, res) => {
     }
 });
 
+// --- ENGINE DELETE ROUTE ---
+app.delete('/delete-engine/:id', (req, res) => {
+    try {
+        const id = req.params.id;
+        const index = customEngines.findIndex(e => e.id === id);
+
+        if (index === -1) {
+            return res.status(404).json({ error: 'Engine not found.' });
+        }
+
+        const engineName = customEngines[index].name;
+
+        const scriptPath = path.join(__dirname, 'Engines', `${id}.js`);
+        if (fs.existsSync(scriptPath)) {
+            fs.unlinkSync(scriptPath);
+        }
+
+        customEngines.splice(index, 1);
+        fs.writeFileSync(enginesFile, JSON.stringify(customEngines, null, 2));
+
+        emitLog(`Custom engine '${engineName}' (${id}) has been DELETED.`);
+        res.json({ success: true, message: `Engine ${engineName} deleted successfully.` });
+    } catch (err) {
+        emitLog(`SYSTEM ERROR (Delete): ${err.message}`);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/shutdown', (req, res) => {
     res.send({ status: 'off' });
     setTimeout(() => process.exit(0), 1000);
@@ -236,9 +264,9 @@ app.get('/', (req, res) => {
     };
 
     customEngines.forEach(e => {
-        const cat = e.category || 'Specific';
+        const cat = e.category || 'Custom';
         if (!allCategories[cat]) allCategories[cat] = [];
-        allCategories[cat].push({ id: e.id, name: `[Custom] ${e.name}`, isCustom: true });
+        allCategories[cat].push({ id: e.id, name: e.name, isCustom: true });
     });
 
     let customDropdownHtml = '';
@@ -258,9 +286,14 @@ app.get('/', (req, res) => {
                                 ${e.name}
                             </div>
                             ${e.isCustom ? `
-                            <button onclick="editEngine(event, '${e.id}')" class="text-slate-500 hover:text-blue-400 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center p-1" title="Edit Engine">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                            </button>
+                            <div class="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                <button onclick="editEngine(event, '${e.id}')" class="text-slate-500 hover:text-blue-400 transition-colors flex items-center justify-center p-1" title="Edit Engine">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                </button>
+                                <button onclick="deleteEngine(event, '${e.id}')" class="text-slate-500 hover:text-red-400 transition-colors flex items-center justify-center p-1" title="Delete Engine">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                            </div>
                             ` : ''}
                         </div>
                     `).join('')}
@@ -319,7 +352,7 @@ app.get('/', (req, res) => {
                         <div class="flex gap-4">
                             <div class="flex-1">
                                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Category</label>
-                                <input id="upCategory" type="text" placeholder="e.g. Specific" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm">
+                                <input id="upCategory" type="text" placeholder="e.g. Custom" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm">
                             </div>
                             <div class="flex-1">
                                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Input Field Name</label>
@@ -510,7 +543,7 @@ app.get('/', (req, res) => {
                         document.getElementById('upId').value = data.id;
                         document.getElementById('upId').readOnly = true; // prevent changing ID of existing engine
                         document.getElementById('upName').value = data.name;
-                        document.getElementById('upCategory').value = data.category || "Specific";
+                        document.getElementById('upCategory').value = data.category || "Custom";
                         document.getElementById('upInputType').value = data.inputType || "Custom Input";
                         document.getElementById('upInst').value = data.instruction || "";
                         document.getElementById('upCode').value = data.code;
@@ -519,6 +552,27 @@ app.get('/', (req, res) => {
                         document.getElementById('dropdownMenu').classList.add('hidden');
                     } catch (err) {
                         alert(err.message);
+                    }
+                }
+
+                async function deleteEngine(e, id) {
+                    e.stopPropagation();
+                    const pwd = prompt("Enter password to delete engine:");
+                    if (pwd !== "1532") {
+                        if (pwd !== null) alert("Incorrect password.");
+                        return;
+                    }
+                    
+                    if (confirm("Are you sure you want to delete engine '" + id + "'? This cannot be undone.")) {
+                        try {
+                            const res = await fetch('/delete-engine/' + id, { method: 'DELETE' });
+                            const data = await res.json();
+                            if(!res.ok) throw new Error(data.error || "Failed to delete.");
+                            alert(data.message);
+                            window.location.reload();
+                        } catch (err) {
+                            alert("Error: " + err.message);
+                        }
                     }
                 }
 
