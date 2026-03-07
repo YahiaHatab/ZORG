@@ -5,5 +5,12 @@
     "instruction": "Take the URL from the website.",
     "inputType": "",
     "category": "Custom"
+  },
+  {
+    "id": "windeurope",
+    "name": "WindEurope",
+    "instruction": "",
+    "inputType": "",
+    "category": "Custom"
   }
 ]
