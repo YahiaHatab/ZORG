@@ -274,13 +274,13 @@ app.get('/', (req, res) => {
         const isGeneral = cat === 'General';
         customDropdownHtml += `
             <div class="border-b border-slate-700/50 last:border-b-0">
-                <div onclick="toggleCategory('${cat}')" class="bg-slate-800 hover:bg-slate-700/50 p-3 flex justify-between items-center cursor-pointer transition-colors group">
+                <div onclick="toggleCategory('${cat}')" class="bg-slate-800 hover:bg-slate-700/50 p-3 flex justify-between items-center cursor-pointer transition-colors group category-header" data-cat-name="${cat.toLowerCase()}">
                     <span class="text-slate-400 font-bold text-[10px] uppercase tracking-widest group-hover:text-slate-300">${cat}</span>
                     <svg id="icon-${cat}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-500 transition-transform duration-200 ${isGeneral ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
                 </div>
                 <div id="cat-${cat}" class="${isGeneral ? '' : 'hidden'} bg-slate-900/50">
                     ${engines.map(e => `
-                        <div class="group p-3 pl-5 hover:bg-slate-800 cursor-pointer text-blue-400 font-bold text-sm border-t border-slate-800 transition-colors flex items-center justify-between" onclick="selectEngine('${e.id}', '${e.name.replace(/'/g, "\\'")}')">
+                        <div class="engine-item group p-3 pl-5 hover:bg-slate-800 cursor-pointer text-blue-400 font-bold text-sm border-t border-slate-800 transition-colors flex items-center justify-between" onclick="selectEngine('${e.id}', '${e.name.replace(/'/g, "\\'")}')" data-engine-name="${e.name.toLowerCase()}">
                             <div class="flex flex-row items-center gap-2">
                                 <span class="w-1.5 h-1.5 rounded-full ${e.isCustom ? 'bg-purple-500' : 'bg-blue-500'}"></span>
                                 ${e.name}
@@ -327,10 +327,41 @@ app.get('/', (req, res) => {
                 #telemetry::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
                 /* Custom scrollbar for dropdown */
                 .dropdown-scroll::-webkit-scrollbar { width: 4px; }
-                .dropdown-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+                /* Custom style for search input expansion */
+                #searchInput { transition: width 0.3s ease, opacity 0.3s ease, padding 0.3s ease; }
+                #searchInput.expanded { width: 14rem; opacity: 1; padding: 0.5rem 1rem; }
+                #searchInput.collapsed { width: 0; opacity: 0; padding: 0; border: none; }
+                
+                /* Custom styles to make default dropdown look more like a custom select */
+                select#upCategory {
+                    -webkit-appearance: none;
+                    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+                    background-repeat: no-repeat;
+                    background-position: right 1rem top 50%;
+                    background-size: 0.65em auto;
+                }
+                select#upCategory option {
+                    background-color: #1e293b;
+                    color: white;
+                }
             </style>
         </head>
         <body class="bg-slate-950 bg-[url('/Icons/Background.png')] bg-cover bg-center bg-fixed bg-no-repeat text-white min-h-screen flex items-center justify-center p-6 relative font-sans before:fixed before:inset-0 before:bg-slate-950/60 before:-z-10">
+            <!-- CUSTOM MESSAGES / PROMPTS MODAL -->
+            <div id="customDialogModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[100] p-4">
+                <div class="bg-slate-900/95 backdrop-blur-2xl p-6 rounded-2xl border border-blue-500/50 shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-sm transform transition-all">
+                    <h3 id="dialogTitle" class="text-xl font-black text-blue-400 mb-3 italic tracking-tighter uppercase">Notice</h3>
+                    <p id="dialogMessage" class="text-sm text-slate-300 mb-5 font-medium"></p>
+                    
+                    <input id="dialogInput" type="password" placeholder="Password..." class="hidden w-full p-3 mb-5 rounded-xl bg-slate-950 border border-slate-700 outline-none text-sm text-center font-mono focus:border-blue-500/50 transition-colors">
+                    
+                    <div class="flex gap-3 justify-end">
+                        <button id="dialogCancelBtn" class="px-5 py-2.5 rounded-xl bg-slate-800 text-slate-400 font-bold hover:bg-slate-700 hover:text-white transition-all text-sm hidden">Cancel</button>
+                        <button id="dialogConfirmBtn" class="px-5 py-2.5 rounded-xl bg-blue-600 text-white font-black hover:bg-blue-500 transition-all text-sm uppercase tracking-wider">OK</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- UPLOAD / EDIT MODAL -->
             <div id="uploadModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4">
                 <div class="bg-slate-900/90 backdrop-blur-2xl p-6 rounded-2xl border border-blue-900/80 shadow-[0_0_50px_rgba(0,0,0,0.7)] w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
@@ -352,10 +383,15 @@ app.get('/', (req, res) => {
                         <div class="flex gap-4">
                             <div class="flex-1">
                                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Category</label>
-                                <select id="upCategory" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm appearance-none cursor-pointer text-white">
-                                    <option value="Custom">Custom</option>
-                                    <option value="General">General</option>
-                                </select>
+                                <div class="relative">
+                                    <select id="upCategory" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm text-white focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all shadow-inner appearance-none cursor-pointer">
+                                        <option value="Custom" class="bg-slate-800 text-white">Custom</option>
+                                        <option value="General" class="bg-slate-800 text-white">General</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                                    </div>
+                                </div>
                             </div>
                             <div class="flex-1">
                                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Input Field Name</label>
@@ -406,19 +442,36 @@ app.get('/', (req, res) => {
                         
                         <!-- CUSTOM DROPDOWN BUTTON -->
                         <div class="flex-1 relative">
-                            <button id="dropdownBtn" onclick="toggleDropdownMenu()" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 text-blue-400 font-bold text-left flex justify-between items-center hover:bg-slate-700/50 transition-colors shadow-inner">
+                            <button id="dropdownBtn" onclick="toggleDropdownMenu()" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 text-blue-400 font-bold text-left flex justify-between items-center hover:bg-slate-700/50 transition-colors shadow-inner relative z-30">
                                 <span id="dropdownBtnText">Map-Dynamics (Marketplace)</span>
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
                             </button>
                             
                             <!-- DROPDOWN MENU PANEL -->
-                            <div id="dropdownMenu" class="hidden absolute top-full left-0 w-full mt-2 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-40 overflow-hidden max-h-80 overflow-y-auto dropdown-scroll">
-                                ${customDropdownHtml}
+                            <div id="dropdownMenu" class="hidden absolute top-full left-0 w-full mt-2 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-40 overflow-hidden flex flex-col max-h-[24rem]">
+                                <!-- SEARCH BAR WITHIN DROPDOWN -->
+                                <div class="p-3 border-b border-slate-700/50 bg-slate-800/80 sticky top-0 z-10 hidden" id="searchContainer">
+                                    <div class="relative">
+                                        <input type="text" id="engineSearchInput" onkeyup="filterEngines()" placeholder="Search engines..." class="w-full p-2 pl-9 bg-slate-900/50 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50 transition-colors">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 absolute left-3 top-2.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                    </div>
+                                </div>
+                                <div class="overflow-y-auto dropdown-scroll flex-1">
+                                    ${customDropdownHtml}
+                                </div>
+                                <div id="noResults" class="hidden text-center p-4 text-slate-500 text-sm font-mono italic">No engines found</div>
                             </div>
                         </div>
                         
+                        <!-- SEARCH TOGGLE BUTTON -->
+                        <div class="flex items-center gap-2">
+                            <button onclick="toggleSearch()" class="w-12 h-12 bg-slate-800 text-slate-400 rounded-xl hover:bg-slate-700 hover:text-blue-400 transition-all border border-slate-700 hover:border-slate-500/50 flex items-center justify-center shrink-0 shadow-lg shadow-black/40 z-20" title="Search Engines">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            </button>
+                        </div>
+                        
                         <!-- SLEEK + UPLOAD BUTTON -->
-                        <button onclick="openUploadModal()" class="w-12 h-12 bg-slate-800 text-blue-500 rounded-xl hover:bg-slate-700 hover:text-blue-400 transition-all border border-slate-700 hover:border-blue-500/50 flex items-center justify-center shrink-0 shadow-lg shadow-black/40" title="Upload Custom Script">
+                        <button onclick="openUploadModal()" class="w-12 h-12 bg-slate-800 text-blue-500 rounded-xl hover:bg-slate-700 hover:text-blue-400 transition-all border border-slate-700 hover:border-blue-500/50 flex items-center justify-center shrink-0 shadow-lg shadow-black/40 z-20" title="Upload Custom Script">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
                         </button>
                     </div>
@@ -456,8 +509,167 @@ app.get('/', (req, res) => {
 
             <script>
                 // -- DROPDOWN LOGIC --
+                let searchActive = false;
+                
+                function toggleSearch() {
+                    searchActive = !searchActive;
+                    const searchContainer = document.getElementById('searchContainer');
+                    const dropdownMenu = document.getElementById('dropdownMenu');
+                    const searchInput = document.getElementById('engineSearchInput');
+                    
+                    if (searchActive) {
+                        searchContainer.classList.remove('hidden');
+                        dropdownMenu.classList.remove('hidden');
+                        searchInput.focus();
+                    } else {
+                        searchContainer.classList.add('hidden');
+                        searchInput.value = '';
+                        filterEngines(); // reset filter
+                    }
+                }
+                
+                // -- CUSTOM DIALOG LOGIC --
+                function customAlert(message, title = "Notice") {
+                    return new Promise(resolve => {
+                        const modal = document.getElementById('customDialogModal');
+                        document.getElementById('dialogTitle').innerText = title;
+                        document.getElementById('dialogTitle').className = "text-xl font-black text-blue-400 mb-3 italic tracking-tighter uppercase";
+                        document.getElementById('dialogMessage').innerText = message;
+                        document.getElementById('dialogInput').classList.add('hidden');
+                        document.getElementById('dialogCancelBtn').classList.add('hidden');
+                        
+                        const confirmBtn = document.getElementById('dialogConfirmBtn');
+                        confirmBtn.className = "px-5 py-2.5 rounded-xl bg-blue-600 text-white font-black hover:bg-blue-500 transition-all text-sm uppercase tracking-wider";
+                        confirmBtn.innerText = "OK";
+                        
+                        const handleConfirm = () => {
+                            modal.classList.replace('flex', 'hidden');
+                            confirmBtn.removeEventListener('click', handleConfirm);
+                            resolve(true);
+                        };
+                        
+                        confirmBtn.addEventListener('click', handleConfirm);
+                        modal.classList.replace('hidden', 'flex');
+                    });
+                }
+                
+                function customConfirm(message, title = "Confirm Action") {
+                    return new Promise(resolve => {
+                        const modal = document.getElementById('customDialogModal');
+                        document.getElementById('dialogTitle').innerText = title;
+                        document.getElementById('dialogTitle').className = "text-xl font-black text-yellow-500 mb-3 italic tracking-tighter uppercase";
+                        document.getElementById('dialogMessage').innerText = message;
+                        document.getElementById('dialogInput').classList.add('hidden');
+                        
+                        const cancelBtn = document.getElementById('dialogCancelBtn');
+                        cancelBtn.classList.remove('hidden');
+                        
+                        const confirmBtn = document.getElementById('dialogConfirmBtn');
+                        confirmBtn.className = "px-5 py-2.5 rounded-xl bg-red-600 text-white font-black hover:bg-red-500 transition-all text-sm uppercase tracking-wider shadow-lg shadow-red-900/20";
+                        confirmBtn.innerText = "Proceed";
+                        
+                        const handleConfirm = () => { cleanup(); resolve(true); };
+                        const handleCancel = () => { cleanup(); resolve(false); };
+                        
+                        const cleanup = () => {
+                            modal.classList.replace('flex', 'hidden');
+                            confirmBtn.removeEventListener('click', handleConfirm);
+                            cancelBtn.removeEventListener('click', handleCancel);
+                        };
+                        
+                        confirmBtn.addEventListener('click', handleConfirm);
+                        cancelBtn.addEventListener('click', handleCancel);
+                        modal.classList.replace('hidden', 'flex');
+                    });
+                }
+                
+                function customPrompt(message, title = "Authentication Required") {
+                    return new Promise(resolve => {
+                        const modal = document.getElementById('customDialogModal');
+                        document.getElementById('dialogTitle').innerText = title;
+                        document.getElementById('dialogTitle').className = "text-xl font-black text-purple-500 mb-3 italic tracking-tighter uppercase";
+                        document.getElementById('dialogMessage').innerText = message;
+                        
+                        const input = document.getElementById('dialogInput');
+                        input.value = '';
+                        input.classList.remove('hidden');
+                        
+                        const cancelBtn = document.getElementById('dialogCancelBtn');
+                        cancelBtn.classList.remove('hidden');
+                        
+                        const confirmBtn = document.getElementById('dialogConfirmBtn');
+                        confirmBtn.className = "px-5 py-2.5 rounded-xl bg-purple-600 text-white font-black hover:bg-purple-500 transition-all text-sm uppercase tracking-wider shadow-lg shadow-purple-900/20";
+                        confirmBtn.innerText = "Submit";
+                        
+                        const handleConfirm = () => { cleanup(); resolve(input.value); };
+                        const handleCancel = () => { cleanup(); resolve(null); };
+                        const handleEnter = (e) => { if(e.key === 'Enter') handleConfirm(); };
+                        
+                        const cleanup = () => {
+                            modal.classList.replace('flex', 'hidden');
+                            confirmBtn.removeEventListener('click', handleConfirm);
+                            cancelBtn.removeEventListener('click', handleCancel);
+                            input.removeEventListener('keypress', handleEnter);
+                        };
+                        
+                        confirmBtn.addEventListener('click', handleConfirm);
+                        cancelBtn.addEventListener('click', handleCancel);
+                        input.addEventListener('keypress', handleEnter);
+                        
+                        modal.classList.replace('hidden', 'flex');
+                        setTimeout(() => input.focus(), 50);
+                    });
+                }
+
+                function filterEngines() {
+                    const term = document.getElementById('engineSearchInput').value.toLowerCase();
+                    const items = document.querySelectorAll('.engine-item');
+                    let anyVisible = false;
+                    
+                    if (term === '') {
+                        // Reset everything back to visible
+                        items.forEach(item => item.style.display = 'flex');
+                        const categories = document.querySelectorAll('.border-b.border-slate-700\\/50');
+                        categories.forEach(cat => {
+                            if (cat === document.getElementById('searchContainer').parentElement) return; 
+                            cat.style.display = 'block';
+                        });
+                        document.getElementById('noResults').classList.add('hidden');
+                        return;
+                    }
+                    
+                    items.forEach(item => {
+                        const name = item.getAttribute('data-engine-name');
+                        if (name.includes(term)) {
+                            item.style.display = 'flex';
+                            anyVisible = true;
+                            // Ensure parent category is visible if it matches
+                            const parentCat = item.closest('.bg-slate-900\\/50');
+                            if (term !== '' && parentCat) {
+                                parentCat.classList.remove('hidden');
+                                const headerId = parentCat.id.replace('cat-', 'icon-');
+                                document.getElementById(headerId).classList.add('rotate-180');
+                            }
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                    
+                    // Toggle No Results
+                    document.getElementById('noResults').classList.toggle('hidden', !!anyVisible || items.length === 0);
+                    
+                    // Toggle categories if empty
+                    const categories = document.querySelectorAll('.border-b.border-slate-700\\/50');
+                    categories.forEach(cat => {
+                        if (cat === document.getElementById('searchContainer').parentElement) return; // skip search barrier
+                        const visibleItems = cat.querySelectorAll('.engine-item[style="display: flex;"], .engine-item:not([style="display: none;"])');
+                        cat.style.display = visibleItems.length > 0 ? 'block' : 'none';
+                    });
+                }
+                
                 function toggleDropdownMenu() {
                     document.getElementById('dropdownMenu').classList.toggle('hidden');
+                    if(searchActive) setTimeout(() => document.getElementById('engineSearchInput').focus(), 50);
                 }
                 
                 function toggleCategory(cat) {
@@ -482,10 +694,12 @@ app.get('/', (req, res) => {
                 document.addEventListener('click', function(event) {
                     const dropdownBtn = document.getElementById('dropdownBtn');
                     const dropdownMenu = document.getElementById('dropdownMenu');
+                    const searchBtn = document.querySelector('button[title="Search Engines"]');
                     const uploadModal = document.getElementById('uploadModal');
                     
-                    if (!dropdownBtn.contains(event.target) && !dropdownMenu.contains(event.target)) {
+                    if (!dropdownBtn.contains(event.target) && !dropdownMenu.contains(event.target) && (!searchBtn || !searchBtn.contains(event.target))) {
                         dropdownMenu.classList.add('hidden');
+                        if(searchActive) { /* optional: close search on click outside */ }
                     }
                 });
 
@@ -537,6 +751,13 @@ app.get('/', (req, res) => {
                 
                 async function editEngine(e, id) {
                     e.stopPropagation(); // Prevent dropdown from closing / selecting
+                    
+                    const pwd = await customPrompt("Verify administrative permission to modify existing framework parameters.", "Security Check");
+                    if (pwd !== "1532") {
+                        if (pwd !== null) await customAlert("Invalid credentials supplied. Access denied.", "Authentication Failure");
+                        return;
+                    }
+                    
                     try {
                         const res = await fetch('/engine/' + id);
                         if (!res.ok) throw new Error("Could not fetch engine data.");
@@ -554,27 +775,28 @@ app.get('/', (req, res) => {
                         document.getElementById('uploadModal').classList.replace('hidden', 'flex'); 
                         document.getElementById('dropdownMenu').classList.add('hidden');
                     } catch (err) {
-                        alert(err.message);
+                        await customAlert(err.message, "System Error");
                     }
                 }
 
                 async function deleteEngine(e, id) {
                     e.stopPropagation();
-                    const pwd = prompt("Enter password to delete engine:");
+                    const pwd = await customPrompt("Verify administrative permission to obliterate engine: " + id, "Security Check");
                     if (pwd !== "1532") {
-                        if (pwd !== null) alert("Incorrect password.");
+                        if (pwd !== null) await customAlert("Invalid credentials supplied. Access denied.", "Authentication Failure");
                         return;
                     }
                     
-                    if (confirm("Are you sure you want to delete engine '" + id + "'? This cannot be undone.")) {
+                    const isConfirmed = await customConfirm("Are you sure you want to delete engine '" + id + "'? This action is permanent and cannot be undone.", "Confirm Deletion");
+                    if (isConfirmed) {
                         try {
                             const res = await fetch('/delete-engine/' + id, { method: 'DELETE' });
                             const data = await res.json();
                             if(!res.ok) throw new Error(data.error || "Failed to delete.");
-                            alert(data.message);
+                            await customAlert(data.message, "Operation Successful");
                             window.location.reload();
                         } catch (err) {
-                            alert("Error: " + err.message);
+                            await customAlert("Error: " + err.message, "System Error");
                         }
                     }
                 }
@@ -588,7 +810,10 @@ app.get('/', (req, res) => {
                         instruction: document.getElementById('upInst').value,
                         code: document.getElementById('upCode').value
                     };
-                    if(!payload.id || !payload.name || !payload.code) return alert("ID, Name, and Code are required.");
+                    if(!payload.id || !payload.name || !payload.code) {
+                        await customAlert("ID, Name, and Code fields are strictly required prior to injection.", "Validation Error");
+                        return;
+                    }
                     
                     try {
                         const res = await fetch('/upload-engine', {
@@ -598,10 +823,10 @@ app.get('/', (req, res) => {
                         });
                         const data = await res.json();
                         if(!res.ok) throw new Error(data.error);
-                        alert(data.message);
+                        await customAlert(data.message, "Operation Successful");
                         window.location.reload();
                     } catch (e) {
-                        alert("Error: " + e.message);
+                        await customAlert("Error: " + e.message, "Injection Failure");
                     }
                 }
 
@@ -704,9 +929,10 @@ app.get('/', (req, res) => {
                 }
                 
                 async function shutdown() { 
-                    if(confirm('Shutdown?')) { 
+                    const isConfirmed = await customConfirm("Are you certain you wish to terminate the ZORG-Ω instance?", "System Shutdown");
+                    if(isConfirmed) { 
                         await fetch('/shutdown', {method:'POST'}); 
-                        document.body.innerHTML = '<div style="display:flex; height:100vh; align-items:center; justify-content:center; font-weight:bold; font-size:24px;">OFFLINE</div>'; 
+                        document.body.innerHTML = '<div style="display:flex; height:100vh; align-items:center; justify-content:center; font-weight:bold; font-size:24px; color:#fff;">OFFLINE</div>'; 
                     } 
                 }
                 
