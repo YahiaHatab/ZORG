@@ -587,8 +587,21 @@ app.get('/', (req, res) => {
                         </button>
                     </div>
                     
-                    <div id="telemetryBox" class="hidden mt-4">
-                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1 pl-1">Live Telemetry</p>
+                    <div id="telemetryBox" class="hidden mt-4 relative group">
+                        <div class="flex justify-between items-end mb-1 pl-1 pr-1">
+                            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Live Telemetry</p>
+                            <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-3 text-[9px] font-bold uppercase tracking-widest">
+                                <button onclick="copyTelemetry()" class="text-slate-400 hover:text-blue-400 transition-colors flex items-center gap-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg> Copy All
+                                </button>
+                                <button onclick="clearTelemetry()" class="text-slate-400 hover:text-red-400 transition-colors flex items-center gap-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg> Clear
+                                </button>
+                                <button id="pauseTelemetryBtn" onclick="toggleTelemetryScroll()" class="text-slate-400 hover:text-yellow-400 transition-colors flex items-center gap-1">
+                                    <svg id="pauseIcon" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> <span id="pauseText">Pause</span>
+                                </button>
+                            </div>
+                        </div>
                         <div id="telemetry" class="bg-black border border-slate-700 rounded-xl p-3 h-40 overflow-y-auto font-mono text-[10px] text-green-400 shadow-inner break-words"></div>
                     </div>
                 </div>
@@ -934,6 +947,31 @@ app.get('/', (req, res) => {
 
                 let logInterval;
                 let abortController;
+                let autoScrollTelemetry = true;
+
+                function copyTelemetry() {
+                    const text = document.getElementById('telemetry').innerText;
+                    navigator.clipboard.writeText(text).then(() => showToast("Telemetry copied to clipboard.", "success"));
+                }
+                
+                function clearTelemetry() {
+                    document.getElementById('telemetry').innerHTML = '';
+                    showToast("Telemetry cleared.", "success");
+                }
+                
+                function toggleTelemetryScroll() {
+                    autoScrollTelemetry = !autoScrollTelemetry;
+                    const btnSpan = document.getElementById('pauseText');
+                    const icon = document.getElementById('pauseIcon');
+                    if(autoScrollTelemetry) {
+                        btnSpan.innerText = 'Pause';
+                        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />';
+                        document.getElementById('telemetry').scrollTop = document.getElementById('telemetry').scrollHeight;
+                    } else {
+                        btnSpan.innerText = 'Resume';
+                        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />';
+                    }
+                }
 
                 function stopRun() {
                     if (abortController) abortController.abort();
@@ -976,7 +1014,9 @@ app.get('/', (req, res) => {
                             const data = await res.json();
                             if (data.logs.length > 0) {
                                 telemetry.innerHTML = data.logs.join('<br>');
-                                telemetry.scrollTop = telemetry.scrollHeight;
+                                if (autoScrollTelemetry) {
+                                    telemetry.scrollTop = telemetry.scrollHeight;
+                                }
                             }
                         } catch(e) {}
                     }, 800);
