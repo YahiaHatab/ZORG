@@ -447,6 +447,9 @@ app.get('/', (req, res) => {
                 </div>
             </div>
 
+            <!-- TOAST CONTAINER -->
+            <div id="toastContainer" class="fixed bottom-6 right-6 z-[200] flex flex-col items-end gap-3 pointer-events-none"></div>
+
             <!-- UPLOAD / EDIT MODAL -->
             <div id="uploadModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4">
                 <div class="bg-slate-900/90 backdrop-blur-2xl p-6 rounded-2xl border border-blue-900/80 shadow-[0_0_50px_rgba(0,0,0,0.7)] w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
@@ -614,27 +617,39 @@ app.get('/', (req, res) => {
                 }
                 
                 // -- CUSTOM DIALOG LOGIC --
-                function customAlert(message, title = "Notice") {
+                function showToast(message, type = 'success') {
                     return new Promise(resolve => {
-                        const modal = document.getElementById('customDialogModal');
-                        document.getElementById('dialogTitle').innerText = title;
-                        document.getElementById('dialogTitle').className = "text-xl font-black text-blue-400 mb-3 italic tracking-tighter uppercase";
-                        document.getElementById('dialogMessage').innerText = message;
-                        document.getElementById('dialogInput').classList.add('hidden');
-                        document.getElementById('dialogCancelBtn').classList.add('hidden');
+                        const container = document.getElementById('toastContainer');
+                        const toast = document.createElement('div');
                         
-                        const confirmBtn = document.getElementById('dialogConfirmBtn');
-                        confirmBtn.className = "px-5 py-2.5 rounded-xl bg-blue-600 text-white font-black hover:bg-blue-500 transition-all text-sm uppercase tracking-wider";
-                        confirmBtn.innerText = "OK";
+                        const bgClass = type === 'success' ? 'bg-emerald-900/95 border-emerald-500/50 shadow-emerald-900/50' : 'bg-red-900/95 border-red-500/50 shadow-red-900/50';
+                        const iconClass = type === 'success' ? 'text-emerald-400' : 'text-red-400';
+                        const title = type === 'success' ? 'SUCCESS' : 'ERROR';
+                        const iconSvg = type === 'success' 
+                            ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>'
+                            : '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>';
+
+                        toast.className = 'transform transition-all duration-300 translate-x-12 opacity-0 flex items-start gap-4 p-4 rounded-xl border shadow-2xl backdrop-blur-xl w-80 ' + bgClass;
+                        toast.innerHTML = 
+                            '<div class="shrink-0 ' + iconClass + ' mt-0.5">' + iconSvg + '</div>' +
+                            '<div class="flex-1">' +
+                                '<h4 class="' + iconClass + ' font-black text-xs uppercase tracking-widest mb-1 italic">' + title + '</h4>' +
+                                '<p class="text-slate-200 text-sm font-medium">' + message + '</p>' +
+                            '</div>';
                         
-                        const handleConfirm = () => {
-                            modal.classList.replace('flex', 'hidden');
-                            confirmBtn.removeEventListener('click', handleConfirm);
-                            resolve(true);
-                        };
+                        container.appendChild(toast);
                         
-                        confirmBtn.addEventListener('click', handleConfirm);
-                        modal.classList.replace('hidden', 'flex');
+                        requestAnimationFrame(() => {
+                            toast.classList.remove('translate-x-12', 'opacity-0');
+                        });
+                        
+                        setTimeout(() => {
+                            toast.classList.add('translate-x-12', 'opacity-0');
+                            setTimeout(() => {
+                                toast.remove();
+                                resolve();
+                            }, 300);
+                        }, 4000);
                     });
                 }
                 
@@ -839,7 +854,7 @@ app.get('/', (req, res) => {
                     
                     const pwd = await customPrompt("Verify administrative permission to modify existing framework parameters.", "Security Check");
                     if (pwd !== "1532") {
-                        if (pwd !== null) await customAlert("Invalid credentials supplied. Access denied.", "Authentication Failure");
+                        if (pwd !== null) showToast("Invalid credentials supplied. Access denied.", "error");
                         return;
                     }
                     
@@ -860,7 +875,7 @@ app.get('/', (req, res) => {
                         document.getElementById('uploadModal').classList.replace('hidden', 'flex'); 
                         document.getElementById('dropdownMenu').classList.add('hidden');
                     } catch (err) {
-                        await customAlert(err.message, "System Error");
+                        showToast(err.message, "error");
                     }
                 }
 
@@ -868,7 +883,7 @@ app.get('/', (req, res) => {
                     e.stopPropagation();
                     const pwd = await customPrompt("Verify administrative permission to obliterate engine: " + id, "Security Check");
                     if (pwd !== "1532") {
-                        if (pwd !== null) await customAlert("Invalid credentials supplied. Access denied.", "Authentication Failure");
+                        if (pwd !== null) showToast("Invalid credentials supplied. Access denied.", "error");
                         return;
                     }
                     
@@ -878,10 +893,10 @@ app.get('/', (req, res) => {
                             const res = await fetch('/delete-engine/' + id, { method: 'DELETE' });
                             const data = await res.json();
                             if(!res.ok) throw new Error(data.error || "Failed to delete.");
-                            await customAlert(data.message, "Operation Successful");
+                            await showToast(data.message, "success");
                             window.location.reload();
                         } catch (err) {
-                            await customAlert("Error: " + err.message, "System Error");
+                            showToast("Error: " + err.message, "error");
                         }
                     }
                 }
@@ -896,7 +911,7 @@ app.get('/', (req, res) => {
                         code: document.getElementById('upCode').value
                     };
                     if(!payload.id || !payload.name || !payload.code) {
-                        await customAlert("ID, Name, and Code fields are strictly required prior to injection.", "Validation Error");
+                        showToast("ID, Name, and Code fields are strictly required prior to injection.", "error");
                         return;
                     }
                     
@@ -908,10 +923,12 @@ app.get('/', (req, res) => {
                         });
                         const data = await res.json();
                         if(!res.ok) throw new Error(data.error);
-                        await customAlert(data.message, "Operation Successful");
+                        
+                        closeUploadModal();
+                        await showToast(data.message, "success");
                         window.location.reload();
                     } catch (e) {
-                        await customAlert("Error: " + e.message, "Injection Failure");
+                        showToast("Error: " + e.message, "error");
                     }
                 }
 
