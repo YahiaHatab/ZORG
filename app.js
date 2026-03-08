@@ -306,9 +306,13 @@ app.get('/', (req, res) => {
     let customToggleStr = customEngines.map(e => {
         let input = (e.inputType || '').trim();
         if (input === '' || input.toLowerCase() === 'none') {
-            return `if(m === '${e.id}') { document.getElementById('customInputBox').classList.add('hidden'); }`;
+            return `if(m === '${e.id}') { document.getElementById('customInputBox').innerHTML = ''; document.getElementById('customInputBox').classList.add('hidden'); }`;
         } else {
-            return `if(m === '${e.id}') { document.getElementById('customInputBox').classList.remove('hidden'); document.getElementById('customInput').placeholder = "${input.replace(/"/g, '\\"')}"; }`;
+            const inputs = input.split(',').map(s => s.trim()).filter(s => s);
+            const inputHtml = inputs.map((placeholder, idx) => 
+                '<input id="customInput_'+idx+'" type="text" placeholder="'+placeholder.replace(/"/g, '&quot;').replace(/'/g, "\\'")+'" class="custom-dynamic-input w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">'
+            ).join('');
+            return `if(m === '${e.id}') { document.getElementById('customInputBox').innerHTML = '${inputHtml}'; document.getElementById('customInputBox').classList.remove('hidden'); }`;
         }
     }).join('\n');
 
@@ -394,8 +398,8 @@ app.get('/', (req, res) => {
                                 </div>
                             </div>
                             <div class="flex-1">
-                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Input Field Name</label>
-                                <input id="upInputType" type="text" placeholder="e.g. Target URL (Leave blank if none)" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Input Field Names (Comma Separated)</label>
+                                <input id="upInputType" type="text" placeholder="e.g. Target URL, Username, Password" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm">
                             </div>
                         </div>
                         <div>
@@ -488,7 +492,7 @@ app.get('/', (req, res) => {
                         <input id="dynamicShowId" type="text" placeholder="Show ID" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">
                         <input id="cookie" type="text" placeholder="PHPSESSID Cookie" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">
                     </div>
-                    <div id="customInputBox" class="hidden"><input id="customInput" type="text" placeholder="Custom Input" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none"></div>
+                    <div id="customInputBox" class="hidden space-y-3"></div>
 
                     <input id="file" type="text" placeholder="Output Filename (Optional) - Defaults to Show URL/ID" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">
                     
@@ -895,7 +899,8 @@ app.get('/', (req, res) => {
                                 cadEventKey: document.getElementById('cadEventKey').value,
                                 dynamicShowId: document.getElementById('dynamicShowId').value,
                                 cookie: document.getElementById('cookie').value,
-                                customInput: document.getElementById('customInput').value,
+                                customInput: Array.from(document.querySelectorAll('.custom-dynamic-input')).map(el => el.value)[0] || '',
+                                customInputs: Array.from(document.querySelectorAll('.custom-dynamic-input')).map(el => el.value),
                                 fileName: document.getElementById('file').value
                             })
                         });

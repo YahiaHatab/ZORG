@@ -12,5 +12,12 @@
     "instruction": "",
     "inputType": "",
     "category": "Custom"
+  },
+  {
+    "id": "cadmiumv2",
+    "name": "CadmiumV2",
+    "instruction": "",
+    "inputType": "Payload, Cookie",
+    "category": "General"
   }
 ]
