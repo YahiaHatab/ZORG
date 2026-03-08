@@ -1,6 +1,6 @@
 /**
- * Custom ZORG-Ω Scraper Engine: Conference Harvester (V2)
- * * @param {Object} params - The payload containing inputs (params.customInput = POST payload, params.token = Cookie string).
+ * Custom ZORG-Ω Scraper Engine: Conference Harvester (V4 - Global Phone Support)
+ * * @param {Object} params - The payload containing inputs (customInput = POST payload, token = Cookie).
  * @param {Function} emitLog - Function to log real-time telemetry strings.
  * @param {Object} runState - State object to monitor cancellation (runState.aborted).
  * @returns {Array} An array of raw exhibitor objects.
@@ -9,26 +9,19 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 
 module.exports = async function scrapeCustomEvent(params, emitLog, runState) {
-    emitLog("Initializing Conference Harvester Engine (V2)...");
+    emitLog("Initializing Conference Harvester Engine (V4 - Global Phone Support)...");
 
     const payloadString = params.customInput;
-    if (!payloadString) {
-        throw new Error("Missing required POST payload in customInput.");
-    }
+    if (!payloadString) throw new Error("Missing required POST payload in customInput.");
 
-    // We will use the 'token' field in the UI to pass the raw Cookie string
     const cookieString = params.token || "";
-    if (!cookieString) {
-        emitLog("WARNING: No cookies provided in the Token field. The server might reject the request.");
-    }
+    if (!cookieString) emitLog("WARNING: No cookies provided. The server might reject the request.");
 
     emitLog("Extracting EventKey from payload...");
     const urlParams = new URLSearchParams(payloadString);
     const eventKey = urlParams.get('EventKey');
 
-    if (!eventKey) {
-        throw new Error("Could not find EventKey in the provided payload string.");
-    }
+    if (!eventKey) throw new Error("Could not find EventKey in the provided payload string.");
 
     emitLog(`Starting extraction for EventKey: ${eventKey}...`);
 
@@ -49,15 +42,11 @@ module.exports = async function scrapeCustomEvent(params, emitLog, runState) {
             }
         });
 
-        // FIXED: Access the 'boothDivs' property based on the network preview
         const boothsData = boothsResponse.data.boothDivs;
-        
         if (!boothsData || !Array.isArray(boothsData)) {
-            emitLog(`Debug - Raw Response Keys: ${Object.keys(boothsResponse.data).join(', ')}`);
             throw new Error("Unexpected response format. Expected 'boothDivs' array inside the response.");
         }
 
-        // Filter for booths that have a boothID and seem to be assigned/unavailable
         const assignedBooths = boothsData.filter(b => b.boothID && (b.boothStatus === "Unavailable" || b.boothStatus === "Rented"));
         const totalBooths = assignedBooths.length;
 
@@ -90,7 +79,6 @@ module.exports = async function scrapeCustomEvent(params, emitLog, runState) {
 
                 const $ = cheerio.load(popupResponse.data);
                 
-                // Initialize default standard fields
                 let record = {
                     "Company Name": "N/A",
                     "Phone": "N/A",
@@ -103,11 +91,9 @@ module.exports = async function scrapeCustomEvent(params, emitLog, runState) {
                     "Website": "N/A"
                 };
 
-                // Extract Company Name
-                const companyName = $('h1.text-left').text().trim();
+                const companyName = $('h1').first().text().trim();
                 if (companyName) record["Company Name"] = companyName;
 
-                // Extract Details from Address Block
                 const addressHtml = $('.ExhibitorAddress1').html();
                 
                 if (addressHtml) {
@@ -116,13 +102,17 @@ module.exports = async function scrapeCustomEvent(params, emitLog, runState) {
                                              .filter(line => line.length > 0);
 
                     lines.forEach(line => {
-                        if (/(?:\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})/.test(line)) {
-                            record["Phone"] = line;
-                        } else if (line.includes('@') && line.includes('.')) {
+                        // V4: Global Phone + Extensions Heuristic
+                        const phoneRegex = /(?:(?:\+?\d{1,3}[\s.-]?)?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}|\b\+?\d{8,15}\b)(?:\s*(?:ext|x|ex)\.?\s*\d+)?/i;
+                        
+                        // We check Email and Website first so they don't accidentally trigger the phone regex if they contain numbers
+                        if (line.includes('@') && line.includes('.')) {
                             const emailMatch = line.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi);
                             if (emailMatch) record["Email"] = emailMatch[0];
                         } else if (line.toLowerCase().includes('http') || line.toLowerCase().includes('www.')) {
                             record["Website"] = line;
+                        } else if (phoneRegex.test(line)) {
+                            record["Phone"] = line;
                         } else if (/[A-Z]{2}\s+\d{5}/.test(line) || line.includes(',')) {
                             if (record["City"] === "N/A" && line !== record["Company Name"]) {
                                 record["City"] = line;
@@ -141,7 +131,7 @@ module.exports = async function scrapeCustomEvent(params, emitLog, runState) {
                 emitLog(`Error fetching Booth ${booth.boothID}: ${err.message}. Skipping...`);
             }
             
-            // Respect rate limits
+            // Respect rate limits!
             await new Promise(r => setTimeout(r, 600)); 
         }
 
@@ -150,6 +140,6 @@ module.exports = async function scrapeCustomEvent(params, emitLog, runState) {
         throw error; 
     }
 
-    emitLog("Conference Harvester Engine finished. Passing data to Standardizer.");
+    emitLog("Conference Harvester Engine V4 finished. Passing data to Standardizer.");
     return rawRecords;
 };

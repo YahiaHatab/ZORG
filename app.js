@@ -3,13 +3,7 @@ const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
 
-// --- IMPORT STANDALONE ENGINES ---
-const scrapeMapDynamics = require('./Engines/MapDynamics');
-const scrapeDusseldorf = require('./Engines/Dusseldorf');
-const scrapeEshow = require('./Engines/Eshow');
-const scrapeCadmium = require('./Engines/Cadmium');
-const scrapeInforma = require('./Engines/Informa');
-const scrapeNuernberg = require('./Engines/Algolia');
+// --- DYNAMIC ENGINES INJECTION READY ---
 
 const app = express();
 const PORT = 3000;
@@ -62,18 +56,25 @@ app.post('/run', async (req, res) => {
     emitLog(`--- RUN PROTOCOL STARTED: ${mode.toUpperCase()} ---`);
 
     try {
-        if (mode === 'marketplace') rawRecords = await scrapeMapDynamics(dynamicShowId, cookie, emitLog);
-        else if (mode === 'dusseldorf') rawRecords = await scrapeDusseldorf(domain, emitLog);
-        else if (mode === 'eshow') rawRecords = await scrapeEshow(token, emitLog);
-        else if (mode === 'cadmium') rawRecords = await scrapeCadmium(cadEventId, cadClientId, cadEventKey, emitLog);
-        else if (mode === 'informa') rawRecords = await scrapeInforma(curlCommand, emitLog);
+        const reqEngine = async (file, ...args) => {
+            const p = path.join(__dirname, 'Engines', file);
+            if (!fs.existsSync(p)) throw new Error(`Engine file ${file} not found.`);
+            delete require.cache[require.resolve(p)];
+            return await require(p)(...args);
+        };
+
+        if (mode === 'marketplace') rawRecords = await reqEngine('MapDynamics.js', dynamicShowId, cookie, emitLog);
+        else if (mode === 'dusseldorf') rawRecords = await reqEngine('Dusseldorf.js', domain, emitLog);
+        else if (mode === 'eshow') rawRecords = await reqEngine('Eshow.js', token, emitLog);
+        else if (mode === 'cadmium') rawRecords = await reqEngine('Cadmium.js', cadEventId, cadClientId, cadEventKey, emitLog);
+        else if (mode === 'informa') rawRecords = await reqEngine('Informa.js', curlCommand, emitLog);
         else if (mode === 'algolia') {
             const appId = curlCommand.match(/x-algolia-application-id[=:]\s*([a-zA-Z0-9]+)/i)?.[1];
             const apiKey = curlCommand.match(/x-algolia-api-key[=:]\s*([a-zA-Z0-9]+)/i)?.[1];
             const indexName = curlCommand.match(/"indexName"\s*:\s*"([^"]+)"/)?.[1];
             const filters = curlCommand.match(/"filters"\s*:\s*"([^"]+)"/)?.[1];
             if (!appId || !apiKey) throw new Error("Could not parse Algolia App ID or API Key from cURL.");
-            rawRecords = await scrapeNuernberg({ appId, apiKey, indexName, filters }, emitLog);
+            rawRecords = await reqEngine('Algolia.js', { appId, apiKey, indexName, filters }, emitLog);
         } else {
             const customEntry = customEngines.find(e => e.id === mode);
             if (customEntry) {
@@ -168,7 +169,16 @@ app.post('/upload-engine', (req, res) => {
         const enginesDir = path.join(__dirname, 'Engines');
         if (!fs.existsSync(enginesDir)) fs.mkdirSync(enginesDir);
 
-        const scriptPath = path.join(enginesDir, `${safeId}.js`);
+        const defaultScriptMap = {
+            'marketplace': 'MapDynamics.js',
+            'dusseldorf': 'Dusseldorf.js',
+            'algolia': 'Algolia.js',
+            'informa': 'Informa.js',
+            'eshow': 'Eshow.js',
+            'cadmium': 'Cadmium.js'
+        };
+
+        const scriptPath = defaultScriptMap[safeId] ? path.join(enginesDir, defaultScriptMap[safeId]) : path.join(enginesDir, `${safeId}.js`);
         fs.writeFileSync(scriptPath, code);
 
         const existingIndex = customEngines.findIndex(e => e.id === safeId);
@@ -180,17 +190,29 @@ app.post('/upload-engine', (req, res) => {
             category: category || 'Custom'
         };
 
+        let msgType = existingIndex >= 0 ? 'UPDATED' : 'INSTALLED';
         if (existingIndex >= 0) {
             customEngines[existingIndex] = engineData;
-            emitLog(`Custom engine '${name}' (${safeId}) has been successfully UPDATED.`);
-            res.json({ success: true, message: `Engine ${name} updated successfully.` });
         } else {
             customEngines.push(engineData);
-            emitLog(`Custom engine '${name}' (${safeId}) has been successfully INSTALLED.`);
-            res.json({ success: true, message: `Engine ${name} installed successfully.` });
         }
 
         fs.writeFileSync(enginesFile, JSON.stringify(customEngines, null, 2));
+
+        if (defaultScriptMap[safeId]) {
+            let delList = [];
+            const delFile = path.join(__dirname, 'deleted_engines.json');
+            if (fs.existsSync(delFile)) {
+                try { delList = JSON.parse(fs.readFileSync(delFile, 'utf8')); } catch (e) { }
+            }
+            if (delList.includes(safeId)) {
+                delList = delList.filter(id => id !== safeId);
+                fs.writeFileSync(delFile, JSON.stringify(delList));
+            }
+        }
+
+        emitLog(`Engine '${name}' (${safeId}) has been successfully ${msgType}.`);
+        res.json({ success: true, message: `Engine ${name} ${msgType.toLowerCase()} successfully.` });
     } catch (err) {
         emitLog(`SYSTEM ERROR (Upload): ${err.message}`);
         res.status(500).json({ error: err.message });
@@ -201,10 +223,26 @@ app.post('/upload-engine', (req, res) => {
 app.get('/engine/:id', (req, res) => {
     try {
         const id = req.params.id;
-        const entry = customEngines.find(e => e.id === id);
-        if (!entry) return res.status(404).json({ error: 'Engine metadata not found.' });
+        let entry = customEngines.find(e => e.id === id);
+        const defaultScriptMap = {
+            'marketplace': { file: 'MapDynamics.js', name: 'Map-Dynamics (Marketplace)' },
+            'dusseldorf': { file: 'Dusseldorf.js', name: 'Messe Düsseldorf' },
+            'algolia': { file: 'Algolia.js', name: 'NürnbergMesse (Algolia)' },
+            'informa': { file: 'Informa.js', name: 'Informa Markets (cURL)' },
+            'eshow': { file: 'Eshow.js', name: 'eShow (Concurrent)' },
+            'cadmium': { file: 'Cadmium.js', name: 'Cadmium (Harvester)' }
+        };
 
-        const scriptPath = path.join(__dirname, 'Engines', `${id}.js`);
+        let scriptPath;
+        if (entry) {
+            scriptPath = defaultScriptMap[id] ? path.join(__dirname, 'Engines', defaultScriptMap[id].file) : path.join(__dirname, 'Engines', `${id}.js`);
+        } else if (defaultScriptMap[id]) {
+            entry = { id: id, name: defaultScriptMap[id].name, category: 'General', inputType: '', instruction: '' };
+            scriptPath = path.join(__dirname, 'Engines', defaultScriptMap[id].file);
+        } else {
+            return res.status(404).json({ error: 'Engine metadata not found.' });
+        }
+
         if (!fs.existsSync(scriptPath)) return res.status(404).json({ error: 'Script file not found.' });
 
         const codeString = fs.readFileSync(scriptPath, 'utf8');
@@ -220,21 +258,46 @@ app.delete('/delete-engine/:id', (req, res) => {
         const id = req.params.id;
         const index = customEngines.findIndex(e => e.id === id);
 
-        if (index === -1) {
+        const defaultScriptMap = {
+            'marketplace': 'MapDynamics.js',
+            'dusseldorf': 'Dusseldorf.js',
+            'algolia': 'Algolia.js',
+            'informa': 'Informa.js',
+            'eshow': 'Eshow.js',
+            'cadmium': 'Cadmium.js'
+        };
+
+        if (index === -1 && !defaultScriptMap[id]) {
             return res.status(404).json({ error: 'Engine not found.' });
         }
 
-        const engineName = customEngines[index].name;
+        let engineName = id;
+        if (index !== -1) {
+            engineName = customEngines[index].name;
+            customEngines.splice(index, 1);
+            fs.writeFileSync(enginesFile, JSON.stringify(customEngines, null, 2));
+        } else if (defaultScriptMap[id]) {
+            engineName = id;
+        }
 
-        const scriptPath = path.join(__dirname, 'Engines', `${id}.js`);
+        if (defaultScriptMap[id]) {
+            let delList = [];
+            const delFile = path.join(__dirname, 'deleted_engines.json');
+            if (fs.existsSync(delFile)) {
+                try { delList = JSON.parse(fs.readFileSync(delFile, 'utf8')); } catch (e) { }
+            }
+            if (!delList.includes(id)) {
+                delList.push(id);
+                fs.writeFileSync(delFile, JSON.stringify(delList));
+            }
+        }
+
+        const scriptPath = defaultScriptMap[id] ? path.join(__dirname, 'Engines', defaultScriptMap[id]) : path.join(__dirname, 'Engines', `${id}.js`);
         if (fs.existsSync(scriptPath)) {
             fs.unlinkSync(scriptPath);
         }
 
-        customEngines.splice(index, 1);
-        fs.writeFileSync(enginesFile, JSON.stringify(customEngines, null, 2));
-
-        emitLog(`Custom engine '${engineName}' (${id}) has been DELETED.`);
+        emitLog(`Engine '${engineName}' (${id}) has been DELETED.`);
         res.json({ success: true, message: `Engine ${engineName} deleted successfully.` });
     } catch (err) {
         emitLog(`SYSTEM ERROR (Delete): ${err.message}`);
@@ -250,7 +313,13 @@ app.post('/shutdown', (req, res) => {
 // --- FRONTEND UI ---
 app.get('/', (req, res) => {
     // Group all engines
-    const defaultEngines = [
+    let deletedEngines = [];
+    try {
+        const delFile = path.join(__dirname, 'deleted_engines.json');
+        if (fs.existsSync(delFile)) deletedEngines = JSON.parse(fs.readFileSync(delFile, 'utf8'));
+    } catch (e) { }
+
+    const defaultEnginesBase = [
         { id: 'marketplace', name: 'Map-Dynamics (Marketplace)' },
         { id: 'dusseldorf', name: 'Messe Düsseldorf' },
         { id: 'algolia', name: 'NürnbergMesse (Algolia)' },
@@ -260,10 +329,24 @@ app.get('/', (req, res) => {
     ];
 
     const allCategories = {
-        'General': defaultEngines
+        'General': []
     };
 
+    defaultEnginesBase.forEach(def => {
+        if (deletedEngines.includes(def.id)) return;
+        const customOverride = customEngines.find(e => e.id === def.id);
+        if (customOverride) {
+            const cat = customOverride.category || 'General';
+            if (!allCategories[cat]) allCategories[cat] = [];
+            allCategories[cat].push({ id: def.id, name: customOverride.name, isCustom: false }); // keep false so dot stays blue
+        } else {
+            allCategories['General'].push({ id: def.id, name: def.name, isCustom: false });
+        }
+    });
+
     customEngines.forEach(e => {
+        if (defaultEnginesBase.some(def => def.id === e.id)) return; // Handled above
+        if (deletedEngines.includes(e.id)) return;
         const cat = e.category || 'Custom';
         if (!allCategories[cat]) allCategories[cat] = [];
         allCategories[cat].push({ id: e.id, name: e.name, isCustom: true });
@@ -285,7 +368,6 @@ app.get('/', (req, res) => {
                                 <span class="w-1.5 h-1.5 rounded-full ${e.isCustom ? 'bg-purple-500' : 'bg-blue-500'}"></span>
                                 ${e.name}
                             </div>
-                            ${e.isCustom ? `
                             <div class="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                 <button onclick="editEngine(event, '${e.id}')" class="text-slate-500 hover:text-blue-400 transition-colors flex items-center justify-center p-1" title="Edit Engine">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
@@ -294,7 +376,6 @@ app.get('/', (req, res) => {
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                 </button>
                             </div>
-                            ` : ''}
                         </div>
                     `).join('')}
                 </div>
@@ -309,8 +390,8 @@ app.get('/', (req, res) => {
             return `if(m === '${e.id}') { document.getElementById('customInputBox').innerHTML = ''; document.getElementById('customInputBox').classList.add('hidden'); }`;
         } else {
             const inputs = input.split(',').map(s => s.trim()).filter(s => s);
-            const inputHtml = inputs.map((placeholder, idx) => 
-                '<input id="customInput_'+idx+'" type="text" placeholder="'+placeholder.replace(/"/g, '&quot;').replace(/'/g, "\\'")+'" class="custom-dynamic-input w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">'
+            const inputHtml = inputs.map((placeholder, idx) =>
+                '<input id="customInput_' + idx + '" type="text" placeholder="' + placeholder.replace(/"/g, '&quot;').replace(/'/g, "\\'") + '" class="custom-dynamic-input w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">'
             ).join('');
             return `if(m === '${e.id}') { document.getElementById('customInputBox').innerHTML = '${inputHtml}'; document.getElementById('customInputBox').classList.remove('hidden'); }`;
         }
