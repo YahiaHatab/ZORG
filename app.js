@@ -49,11 +49,14 @@ app.get('/favicon.ico', (req, res) => {
 
 // --- EXECUTION ROUTE & STANDARDIZER ---
 app.post('/run', async (req, res) => {
-    const { mode, domain, fileName, curlCommand, token, cadEventId, cadClientId, cadEventKey, dynamicShowId, cookie, customInput } = req.body;
+    const { mode, domain, fileName, curlCommand, token, cadEventId, cadClientId, cadEventKey, dynamicShowId, cookie, customInput, testMode } = req.body;
     let rawRecords = [];
 
     globalLogs = []; // Reset telemetry for new run
     emitLog(`--- RUN PROTOCOL STARTED: ${mode.toUpperCase()} ---`);
+
+    let originalPush = Array.prototype.push;
+    let testRecordsCaptured = [];
 
     try {
         const reqEngine = async (file, ...args) => {
@@ -63,32 +66,59 @@ app.post('/run', async (req, res) => {
             return await require(p)(...args);
         };
 
-        if (mode === 'marketplace') rawRecords = await reqEngine('MapDynamics.js', dynamicShowId, cookie, emitLog);
-        else if (mode === 'dusseldorf') rawRecords = await reqEngine('Dusseldorf.js', domain, emitLog);
-        else if (mode === 'eshow') rawRecords = await reqEngine('Eshow.js', token, emitLog);
-        else if (mode === 'cadmium') rawRecords = await reqEngine('Cadmium.js', cadEventId, cadClientId, cadEventKey, emitLog);
-        else if (mode === 'informa') rawRecords = await reqEngine('Informa.js', curlCommand, emitLog);
-        else if (mode === 'algolia') {
-            const appId = curlCommand.match(/x-algolia-application-id[=:]\s*([a-zA-Z0-9]+)/i)?.[1];
-            const apiKey = curlCommand.match(/x-algolia-api-key[=:]\s*([a-zA-Z0-9]+)/i)?.[1];
-            const indexName = curlCommand.match(/"indexName"\s*:\s*"([^"]+)"/)?.[1];
-            const filters = curlCommand.match(/"filters"\s*:\s*"([^"]+)"/)?.[1];
-            if (!appId || !apiKey) throw new Error("Could not parse Algolia App ID or API Key from cURL.");
-            rawRecords = await reqEngine('Algolia.js', { appId, apiKey, indexName, filters }, emitLog);
-        } else {
-            const customEntry = customEngines.find(e => e.id === mode);
-            if (customEntry) {
-                const scriptPath = path.join(__dirname, 'Engines', `${customEntry.id}.js`);
-                if (fs.existsSync(scriptPath)) {
-                    delete require.cache[require.resolve(scriptPath)];
-                    const customScrape = require(scriptPath);
-                    rawRecords = await customScrape(req.body, emitLog);
-                } else {
-                    throw new Error(`Engine file for ${customEntry.name} not found.`);
+        if (testMode) {
+            emitLog("🧪 TEST MODE PROTOCOL ACTIVE: Hijacking Engine array memory to force aggressive early exit at 5 records...");
+            Array.prototype.push = function (...args) {
+                let resOutput = originalPush.apply(this, args);
+                if (args.length > 0 && args[0] && typeof args[0] === 'object' && ('Company Name' in args[0])) {
+                    if (!testRecordsCaptured.includes(args[0])) {
+                        testRecordsCaptured[testRecordsCaptured.length] = args[0];
+                    }
+                    if (testRecordsCaptured.length >= 5) {
+                        throw new Error("TEST_MODE_LIMIT_MET");
+                    }
                 }
+                return resOutput;
+            };
+        }
+
+        try {
+            if (mode === 'marketplace') rawRecords = await reqEngine('MapDynamics.js', dynamicShowId, cookie, emitLog);
+            else if (mode === 'dusseldorf') rawRecords = await reqEngine('Dusseldorf.js', domain, emitLog);
+            else if (mode === 'eshow') rawRecords = await reqEngine('Eshow.js', token, emitLog);
+            else if (mode === 'cadmium') rawRecords = await reqEngine('Cadmium.js', cadEventId, cadClientId, cadEventKey, emitLog);
+            else if (mode === 'informa') rawRecords = await reqEngine('Informa.js', curlCommand, emitLog);
+            else if (mode === 'algolia') {
+                const appId = curlCommand.match(/x-algolia-application-id[=:]\s*([a-zA-Z0-9]+)/i)?.[1];
+                const apiKey = curlCommand.match(/x-algolia-api-key[=:]\s*([a-zA-Z0-9]+)/i)?.[1];
+                const indexName = curlCommand.match(/"indexName"\s*:\s*"([^"]+)"/)?.[1];
+                const filters = curlCommand.match(/"filters"\s*:\s*"([^"]+)"/)?.[1];
+                if (!appId || !apiKey) throw new Error("Could not parse Algolia App ID or API Key from cURL.");
+                rawRecords = await reqEngine('Algolia.js', { appId, apiKey, indexName, filters }, emitLog);
             } else {
-                throw new Error("Unknown mode selected.");
+                const customEntry = customEngines.find(e => e.id === mode);
+                if (customEntry) {
+                    const scriptPath = path.join(__dirname, 'Engines', `${customEntry.id}.js`);
+                    if (fs.existsSync(scriptPath)) {
+                        delete require.cache[require.resolve(scriptPath)];
+                        const customScrape = require(scriptPath);
+                        rawRecords = await customScrape(req.body, emitLog);
+                    } else {
+                        throw new Error(`Engine file for ${customEntry.name} not found.`);
+                    }
+                } else {
+                    throw new Error("Unknown mode selected.");
+                }
             }
+        } catch (engineErr) {
+            if (testMode && engineErr.message && engineErr.message.includes("TEST_MODE_LIMIT_MET")) {
+                emitLog("🧪 TEST MODE FULFILLED: Limit hit. Engine operation gracefully short-circuited.");
+                rawRecords = testRecordsCaptured;
+            } else {
+                throw engineErr;
+            }
+        } finally {
+            if (testMode) Array.prototype.push = originalPush;
         }
 
         if (!rawRecords || !rawRecords.length) {
@@ -596,6 +626,16 @@ app.get('/', (req, res) => {
                     
                     <div class="flex gap-3 relative">
                         <button id="btn" onclick="run()" class="w-full bg-blue-600 p-5 rounded-xl font-black text-xl hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/20 active:scale-95 tracking-tight">EXECUTE ARCHITECT</button>
+                        
+                        <!-- TEST MODE TOGGLE -->
+                        <div class="flex items-center justify-center bg-slate-800 border border-slate-700 rounded-xl px-4 shadow-lg shadow-black/40" title="Test Mode (Max 5 items extracted)">
+                             <label class="relative inline-flex items-center cursor-pointer group">
+                                 <input type="checkbox" id="testModeToggle" class="sr-only peer">
+                                 <div class="w-11 h-6 bg-slate-900 border border-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-400 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white shadow-inner"></div>
+                                 <span class="ml-2 mt-0.5 text-[10px] font-black uppercase tracking-widest text-slate-500 select-none peer-checked:text-purple-400 transition-colors">Test</span>
+                             </label>
+                        </div>
+
                         <button id="stopBtn" onclick="stopRun()" class="w-20 bg-slate-800 text-red-500 border border-slate-700 hover:border-red-500/50 hover:bg-slate-700 transition-all rounded-xl focus:outline-none flex items-center justify-center shrink-0 shadow-lg shadow-black/40 pointer-events-none opacity-50" title="Emergency Stop">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg>
                         </button>
@@ -1063,7 +1103,8 @@ app.get('/', (req, res) => {
                                 cookie: document.getElementById('cookie').value,
                                 customInput: Array.from(document.querySelectorAll('.custom-dynamic-input')).map(el => el.value)[0] || '',
                                 customInputs: Array.from(document.querySelectorAll('.custom-dynamic-input')).map(el => el.value),
-                                fileName: document.getElementById('file').value
+                                fileName: document.getElementById('file').value,
+                                testMode: document.getElementById('testModeToggle').checked
                             })
                         });
                         
