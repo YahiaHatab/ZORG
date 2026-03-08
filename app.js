@@ -383,7 +383,7 @@ app.get('/', (req, res) => {
         `;
     }
 
-    let customInstStr = customEngines.map(e => `inst["${e.id}"] = "${e.instruction.replace(/"/g, '\\"')}";`).join('\n');
+    let customInstStr = customEngines.map(e => `inst["${e.id}"] = ${JSON.stringify(e.instruction || '')};`).join('\n');
     let customToggleStr = customEngines.map(e => {
         let input = (e.inputType || '').trim();
         if (input === '' || input.toLowerCase() === 'none') {
@@ -485,7 +485,7 @@ app.get('/', (req, res) => {
                         </div>
                         <div>
                             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Instructions String</label>
-                            <input id="upInst" type="text" placeholder="Instructions displayed when engine is selected..." class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm">
+                            <textarea id="upInst" placeholder="Instructions displayed when engine is selected... (Supports multiple lines)" class="w-full p-3 h-24 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm"></textarea>
                         </div>
                         <div>
                             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 flex justify-between">
@@ -517,7 +517,7 @@ app.get('/', (req, res) => {
 
                 <div id="instructionPanel" class="mb-4 p-4 bg-slate-950/40 rounded-xl border border-blue-900/20">
                     <h3 class="text-[10px] font-bold text-blue-400 uppercase mb-1 tracking-widest">Protocol</h3>
-                    <div id="instructionContent" class="text-[11px] text-slate-400 leading-relaxed italic"></div>
+                    <div id="instructionContent" class="text-[11px] text-slate-400 leading-relaxed italic whitespace-pre-wrap"></div>
                 </div>
 
                 <div class="space-y-4">

@@ -15,9 +15,23 @@
   },
   {
     "id": "cadmiumv2",
-    "name": "CadmiumV3",
-    "instruction": "",
+    "name": "Cadmium",
+    "instruction": "Payload: Press F12 -> Network tab -> Refresh (F5) -> Filter \"CreateBoothDivs\" -> Click the file -> Payload tab -> Copy the text -> Paste into Custom Input.\n\nCookie: In that same file -> Headers tab -> Scroll to Request Headers -> Find \"Cookie:\" -> Copy the long text next to it -> Paste into Token.",
     "inputType": "Payload, Cookie",
     "category": "General"
+  },
+  {
+    "id": "tristate",
+    "name": "Expotracker floorplan",
+    "instruction": "URL: Navigate to the target floorplan page -> Copy the URL from your browser's address bar -> Paste into Custom Input.\nCookie: Press F12 -> Network tab -> Refresh (F5) -> Search via Filter \"ViewFloorPlan.aspx\" -> Click on it -> Choose \"Cookies\" Tab -> Copy value of \"ASP.NET_SessionId\" -> Paste. ",
+    "inputType": "URL, Cookie",
+    "category": "General"
+  },
+  {
+    "id": "eurosatory",
+    "name": "Eurosatory",
+    "instruction": "",
+    "inputType": "",
+    "category": "Custom"
   }
 ]

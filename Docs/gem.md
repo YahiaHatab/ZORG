@@ -46,7 +46,7 @@ Only after receiving this context should you proceed to generate the script.
 
 Every custom engine you build **MUST** export a single asynchronous function. The function will be called dynamically by `app.js` and receives three arguments:
 
-1. `params`: An object containing the user's frontend inputs (`params.domain`, `params.token`, `params.customInput`, etc.)
+1. `params`: An object containing the user's frontend inputs (`params.domain`, `params.token`, `params.customInput`, etc.). For multiple dynamic inputs created by a comma-separated Input Field Name list, use the `params.customInputs` array (e.g., `params.customInputs[0]`, `params.customInputs[1]`).
 
 2. `emitLog`: A function `(message: string) => void` used to stream real-time telemetry back to the UI.
 
@@ -81,10 +81,15 @@ module.exports = async function scrapeCustomEvent(params, emitLog, runState) {
 
 
     // Extract what you need from the payload
-
     const input = params.customInput; 
-
-    if (!input) throw new Error("Missing required input parameter.");
+    
+    // If you configured multiple input fields via comma-separation, access them via array:
+    // const targetUrl = params.customInputs[0];
+    // const authKey = params.customInputs[1];
+    
+    if (!input && (!params.customInputs || params.customInputs.length === 0)) {
+        throw new Error("Missing required input parameter.");
+    }
 
 
 
@@ -203,3 +208,11 @@ module.exports = async function scrapeCustomEvent(params, emitLog, runState) {
 3. **No Puppeteer:** ZORG-Ω relies entirely on HTTP clients (like `axios` or standard `fetch`). You must extract data by replicating API calls or parsing static HTML. Puppeteer and Playwright are strictly forbidden.
 
 4. **Use Output only:** Do not instruct the user to "install" the code or "edit `app.js`". Just provide the raw Node.js script. The user has an "Architect Upload UI" where they will simply paste your code.
+
+
+
+Alwyas provide instruction of how to get the input if there is one, and format it like this step-by-step instructions as a maximum of 2 lines using arrows (->)", and I will have it locked in for all our future builds!. An Example: Payload: Press F12 -> Network tab -> Refresh (F5) -> Filter "CreateBoothDivs" -> Click the file -> Payload tab -> Copy the text -> Paste into Custom Input.
+
+
+
+Cookie: In that same file -> Headers tab -> Scroll to Request Headers -> Find "Cookie:" -> Copy the long text next to it -> Paste into Token.
