@@ -150,6 +150,8 @@ app.post('/run', async (req, res) => {
 
         emitLog("Transmission ready. Awaiting frontend receipt.");
         res.setHeader('Content-Disposition', `attachment; filename="${fileName || defaultFileName}.xlsx"`);
+        res.setHeader('Access-Control-Expose-Headers', 'X-Record-Count');
+        res.setHeader('X-Record-Count', standardizedRecords.length);
         res.send(buf);
     } catch (err) {
         emitLog(`SYSTEM ERROR: ${err.message}`);
@@ -449,6 +451,18 @@ app.get('/', (req, res) => {
 
             <!-- TOAST CONTAINER -->
             <div id="toastContainer" class="fixed bottom-6 right-6 z-[200] flex flex-col items-end gap-3 pointer-events-none"></div>
+
+            <!-- POST-EXECUTION DASHBOARD MODAL -->
+            <div id="successModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[150] p-4 backdrop-blur-sm">
+                <div class="bg-slate-900/90 backdrop-blur-2xl p-8 rounded-3xl border border-emerald-500/50 shadow-[0_0_80px_rgba(16,185,129,0.2)] w-full max-w-md transform transition-all text-center">
+                    <div class="mx-auto w-20 h-20 bg-emerald-900/50 rounded-full flex items-center justify-center mb-6 border border-emerald-500/30 shadow-inner">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <h2 class="text-3xl font-black text-emerald-400 mb-2 italic tracking-tighter uppercase drop-shadow-md">Extraction Complete!</h2>
+                    <p id="successModalDesc" class="text-slate-300 font-medium mb-8 text-lg">0 Distinct Records Assembled. Exporting...</p>
+                    <button onclick="closeSuccessModal()" class="w-full bg-emerald-600 p-4 rounded-xl font-black text-lg text-white hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-900/20 active:scale-95 tracking-tight uppercase">Acknowledge</button>
+                </div>
+            </div>
 
             <!-- UPLOAD / EDIT MODAL -->
             <div id="uploadModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4">
@@ -861,6 +875,16 @@ app.get('/', (req, res) => {
                 function closeUploadModal() { 
                     document.getElementById('uploadModal').classList.replace('flex', 'hidden'); 
                 }
+
+                function showSuccessModal(count) {
+                    const formattedCount = parseInt(count || 0).toLocaleString();
+                    document.getElementById('successModalDesc').innerText = formattedCount + ' Distinct Records Assembled. Exporting...';
+                    document.getElementById('successModal').classList.replace('hidden', 'flex');
+                }
+                
+                function closeSuccessModal() {
+                    document.getElementById('successModal').classList.replace('flex', 'hidden');
+                }
                 
                 async function editEngine(e, id) {
                     e.stopPropagation(); // Prevent dropdown from closing / selecting
@@ -1048,6 +1072,7 @@ app.get('/', (req, res) => {
                             throw new Error(errData.error || 'Crawl Failed.');
                         }
                         
+                        const recordCount = response.headers.get('X-Record-Count') || 0;
                         const blob = await response.blob();
                         const url = window.URL.createObjectURL(blob);
                         const a = document.createElement('a');
@@ -1057,6 +1082,7 @@ app.get('/', (req, res) => {
                         
                         loader.classList.add('hidden');
                         completeText.classList.remove('hidden');
+                        showSuccessModal(recordCount);
                     } catch (err) {
                         if (err.name === 'AbortError') return;
                         loader.classList.add('hidden');
