@@ -1,8 +1,0 @@
-[Desktop Entry]
-Version=1.0
-Name=ZORG-Ω
-Comment=Trade Show Scraper
-Exec=bash -c '"$(dirname "%k")/run_zorg.sh"' dummy %k
-Icon=./Icons/favicon.ico
-Terminal=true
-Type=Application
