@@ -59,7 +59,9 @@ module.exports = async function scrapeCustomEvent(params, emitLog, runState) {
     try {
         const totalPages = 50; 
         for (let i = 1; i <= totalPages; i++) {
-            // 🛑 CRITICAL: Check for user abort!
+            // 🛑 CRITICAL (Optional but Recommended): Check for user abort!
+            // Note: ZORG-Ω Architect automatically aborts any active `axios` or `fetch` requests when the user clicks Abort.
+            // Explicitly checking `runState.aborted` is only necessary to break out of heavy CPU loops.
             if (runState && runState.aborted) {
                 emitLog("Extraction aborted gracefully.");
                 break; 

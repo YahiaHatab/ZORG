@@ -50,7 +50,7 @@ Every custom engine you build **MUST** export a single asynchronous function. Th
 
 2. `emitLog`: A function `(message: string) => void` used to stream real-time telemetry back to the UI.
 
-3. `runState`: An object `{ aborted: boolean, updateProgress: function }`. You **must** check `if (runState && runState.aborted)` inside your extraction loops to stop gracefully if the user clicks 'Stop'. You **should** also call `runState?.updateProgress?.(current, total)` to animate the UI progress bar.
+3. `runState`: An object `{ aborted: boolean, updateProgress: function }`. ZORG-Ω will automatically abort any active `axios` or `fetch` network requests globally when 'Stop' is pressed, so explicitly checking `if (runState && runState.aborted)` is technically optional but recommended for breaking out of heavy CPU loops. You **should** also call `runState?.updateProgress?.(current, total)` to animate the UI progress bar.
 
 
 
@@ -111,8 +111,9 @@ module.exports = async function scrapeCustomEvent(params, emitLog, runState) {
 
         
 
-            // 🛑 CRITICAL: Check if the user aborted the scrape!
-
+            // 🛑 CRITICAL (Optional but Recommended): Check if the user aborted the scrape!
+            // Note: ZORG-Ω Architect automatically aborts any active `axios` or `fetch` requests globally.
+            // Explicitly checking `runState.aborted` here handles breaking out of the loop faster.
             if (runState && runState.aborted) {
 
                 emitLog("Extraction aborted by user gracefully. Exiting loop.");

@@ -2,7 +2,7 @@ const axios = require('axios');
 const pLimit = require('p-limit');
 const limit = (typeof pLimit === 'function') ? pLimit(25) : pLimit.default(25);
 
-async function scrapeMapDynamics(showId, cookie, emitLog) {
+async function scrapeMapDynamics(showId, cookie, emitLog, runState) {
     emitLog(`Initializing Map-Dynamics for Show ID: ${showId}...`);
     const START_URL = 'https://homebase.map-dynamics.com/components/marketplace/start.marketplace.php';
     const PROFILE_URL = 'https://homebase.map-dynamics.com/components/marketplace/profile.marketplace.php';
@@ -21,6 +21,7 @@ async function scrapeMapDynamics(showId, cookie, emitLog) {
 
     let processed = 0;
     const tasks = Array.from(exhibitorMap.entries()).map(([id, name]) => limit(async () => {
+        if (runState && runState.aborted) return null;
         try {
             await new Promise(r => setTimeout(r, Math.random() * 800));
             const profileRes = await axios.post(PROFILE_URL, `Show_ID=${showId}&ID=${id}&Tab=1`, { headers, timeout: 15000 });

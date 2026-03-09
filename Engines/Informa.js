@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-async function scrapeInforma(curlInput, emitLog) {
+async function scrapeInforma(curlInput, emitLog, runState) {
     emitLog("Initializing Informa Engine...");
     const urlMatch = curlInput.match(/'(https:\/\/exhibitors\.informamarkets-info\.com\/api[^']+)'/);
     const cookieMatch = curlInput.match(/-H\s+'cookie:\s*([^']+)'/i) || curlInput.match(/cookie:\s*([^']+)/i);
@@ -18,6 +18,7 @@ async function scrapeInforma(curlInput, emitLog) {
     };
 
     emitLog("Connecting to Informa API...");
+    if (runState && runState.aborted) return [];
     const response = await axios.get(fullApiUrl, { headers });
     const exhibitors = response.data.data || [];
 

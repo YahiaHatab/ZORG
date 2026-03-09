@@ -17,7 +17,7 @@
     "id": "cadmiumv2",
     "name": "Cadmium",
     "instruction": "Payload: Press F12 -> Network tab -> Refresh (F5) -> Filter \"CreateBoothDivs\" -> Click the file -> Payload tab -> Copy the text -> Paste into Custom Input.\n\nCookie: In that same file -> Headers tab -> Scroll to Request Headers -> Find \"Cookie:\" -> Copy the long text next to it -> Paste into Token.",
-    "inputType": "Payload, Cookie",
+    "inputType": "Payload",
     "category": "General"
   },
   {

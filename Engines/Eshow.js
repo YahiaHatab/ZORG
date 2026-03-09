@@ -2,7 +2,7 @@ const axios = require('axios');
 const pLimit = require('p-limit');
 const limit = (typeof pLimit === 'function') ? pLimit(25) : pLimit.default(25);
 
-async function scrapeEshow(token, emitLog) {
+async function scrapeEshow(token, emitLog, runState) {
     emitLog("Initializing eShow Engine...");
     const headers = { "Authorization": `Bearer ${token}`, "Origin": "https://maps.goeshow.com", "Referer": "https://maps.goeshow.com/" };
 
@@ -15,6 +15,7 @@ async function scrapeEshow(token, emitLog) {
 
     let processed = 0;
     const tasks = keys.map((key) => limit(async () => {
+        if (runState && runState.aborted) return null;
         for (let attempt = 0; attempt < 3; attempt++) {
             try {
                 const res = await axios.get(`https://s2.goeshow.com/webservices/eshow/floor_space.cfc?method=getExhibitor&exhibitor_key=${key}`, { headers, timeout: 10000 });

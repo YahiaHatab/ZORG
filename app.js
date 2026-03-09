@@ -2,6 +2,31 @@ const express = require('express');
 const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
+const { AsyncLocalStorage } = require('async_hooks');
+const axios = require('axios');
+
+const asyncLocalStorage = new AsyncLocalStorage();
+
+// --- GLOBAL INTERCEPTORS ---
+// Automatically abort any network requests from any engine without code changes!
+axios.interceptors.request.use(config => {
+    const store = asyncLocalStorage.getStore();
+    if (store && store.runState && store.runState.aborted) {
+        throw new axios.Cancel("OPERATION_ABORTED_BY_SYSTEM");
+    }
+    return config;
+});
+
+if (typeof global.fetch === 'function') {
+    const originalFetch = global.fetch;
+    global.fetch = async function (...args) {
+        const store = asyncLocalStorage.getStore();
+        if (store && store.runState && store.runState.aborted) {
+            throw new Error("OPERATION_ABORTED_BY_SYSTEM");
+        }
+        return originalFetch.apply(this, args);
+    };
+}
 
 // --- DYNAMIC ENGINES INJECTION READY ---
 
@@ -52,6 +77,14 @@ app.post('/run', async (req, res) => {
     const { mode, domain, fileName, curlCommand, token, cadEventId, cadClientId, cadEventKey, dynamicShowId, cookie, customInput, testMode } = req.body;
     let rawRecords = [];
 
+    let runState = { aborted: false };
+    req.on('close', () => {
+        if (!res.writableEnded) {
+            runState.aborted = true;
+            emitLog("Client connection closed. Operation ABORTED.");
+        }
+    });
+
     globalLogs = []; // Reset telemetry for new run
     emitLog(`--- RUN PROTOCOL STARTED: ${mode.toUpperCase()} ---`);
 
@@ -83,33 +116,35 @@ app.post('/run', async (req, res) => {
         }
 
         try {
-            if (mode === 'marketplace') rawRecords = await reqEngine('MapDynamics.js', dynamicShowId, cookie, emitLog);
-            else if (mode === 'dusseldorf') rawRecords = await reqEngine('Dusseldorf.js', domain, emitLog);
-            else if (mode === 'eshow') rawRecords = await reqEngine('Eshow.js', token, emitLog);
-            else if (mode === 'cadmium') rawRecords = await reqEngine('Cadmium.js', cadEventId, cadClientId, cadEventKey, emitLog);
-            else if (mode === 'informa') rawRecords = await reqEngine('Informa.js', curlCommand, emitLog);
-            else if (mode === 'algolia') {
-                const appId = curlCommand.match(/x-algolia-application-id[=:]\s*([a-zA-Z0-9]+)/i)?.[1];
-                const apiKey = curlCommand.match(/x-algolia-api-key[=:]\s*([a-zA-Z0-9]+)/i)?.[1];
-                const indexName = curlCommand.match(/"indexName"\s*:\s*"([^"]+)"/)?.[1];
-                const filters = curlCommand.match(/"filters"\s*:\s*"([^"]+)"/)?.[1];
-                if (!appId || !apiKey) throw new Error("Could not parse Algolia App ID or API Key from cURL.");
-                rawRecords = await reqEngine('Algolia.js', { appId, apiKey, indexName, filters }, emitLog);
-            } else {
-                const customEntry = customEngines.find(e => e.id === mode);
-                if (customEntry) {
-                    const scriptPath = path.join(__dirname, 'Engines', `${customEntry.id}.js`);
-                    if (fs.existsSync(scriptPath)) {
-                        delete require.cache[require.resolve(scriptPath)];
-                        const customScrape = require(scriptPath);
-                        rawRecords = await customScrape(req.body, emitLog);
-                    } else {
-                        throw new Error(`Engine file for ${customEntry.name} not found.`);
-                    }
+            await asyncLocalStorage.run({ runState }, async () => {
+                if (mode === 'marketplace') rawRecords = await reqEngine('MapDynamics.js', dynamicShowId, cookie, emitLog, runState);
+                else if (mode === 'dusseldorf') rawRecords = await reqEngine('Dusseldorf.js', domain, emitLog, runState);
+                else if (mode === 'eshow') rawRecords = await reqEngine('Eshow.js', token, emitLog, runState);
+                else if (mode === 'cadmium') rawRecords = await reqEngine('Cadmium.js', cadEventId, cadClientId, cadEventKey, emitLog, runState);
+                else if (mode === 'informa') rawRecords = await reqEngine('Informa.js', curlCommand, emitLog, runState);
+                else if (mode === 'algolia') {
+                    const appId = curlCommand.match(/x-algolia-application-id[=:]\s*([a-zA-Z0-9]+)/i)?.[1];
+                    const apiKey = curlCommand.match(/x-algolia-api-key[=:]\s*([a-zA-Z0-9]+)/i)?.[1];
+                    const indexName = curlCommand.match(/"indexName"\s*:\s*"([^"]+)"/)?.[1];
+                    const filters = curlCommand.match(/"filters"\s*:\s*"([^"]+)"/)?.[1];
+                    if (!appId || !apiKey) throw new Error("Could not parse Algolia App ID or API Key from cURL.");
+                    rawRecords = await reqEngine('Algolia.js', { appId, apiKey, indexName, filters }, emitLog, runState);
                 } else {
-                    throw new Error("Unknown mode selected.");
+                    const customEntry = customEngines.find(e => e.id === mode);
+                    if (customEntry) {
+                        const scriptPath = path.join(__dirname, 'Engines', `${customEntry.id}.js`);
+                        if (fs.existsSync(scriptPath)) {
+                            delete require.cache[require.resolve(scriptPath)];
+                            const customScrape = require(scriptPath);
+                            rawRecords = await customScrape(req.body, emitLog, runState);
+                        } else {
+                            throw new Error(`Engine file for ${customEntry.name} not found.`);
+                        }
+                    } else {
+                        throw new Error("Unknown mode selected.");
+                    }
                 }
-            }
+            });
         } catch (engineErr) {
             if (testMode && engineErr.message && engineErr.message.includes("TEST_MODE_LIMIT_MET")) {
                 emitLog("🧪 TEST MODE FULFILLED: Limit hit. Engine operation gracefully short-circuited.");

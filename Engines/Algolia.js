@@ -1,7 +1,7 @@
 const axios = require('axios');
 const { findBoothDeeply } = require('../utils/helpers');
 
-async function scrapeNuernberg(config, emitLog) {
+async function scrapeNuernberg(config, emitLog, runState) {
     emitLog("Initializing Algolia Extraction Matrix...");
     const { appId, apiKey, indexName, filters } = config;
     const apiUrl = `https://${appId.toLowerCase()}-dsn.algolia.net/1/indexes/*/queries`;
@@ -9,6 +9,10 @@ async function scrapeNuernberg(config, emitLog) {
     let uniqueExhibitors = new Map();
 
     for (const char of searchTerms) {
+        if (runState && runState.aborted) {
+            emitLog("Extraction aborted by user gracefully. Exiting loop.");
+            break;
+        }
         try {
             emitLog(`Executing Query Vector: [${char || 'EMPTY'}]...`);
             const payload = { "requests": [{ "indexName": indexName, "params": `query=${encodeURIComponent(char)}&hitsPerPage=1000&filters=${encodeURIComponent(filters || "")}` }] };

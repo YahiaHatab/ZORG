@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-async function scrapeDusseldorf(domain, emitLog) {
+async function scrapeDusseldorf(domain, emitLog, runState) {
     let allExhibitors = [];
     let start = 0;
     const cleanDomain = domain.replace(/^(https?:\/\/)?/, '').split('/')[0];
@@ -9,6 +9,10 @@ async function scrapeDusseldorf(domain, emitLog) {
     emitLog(`Initializing Düsseldorf Engine for ${cleanDomain}...`);
 
     while (true) {
+        if (runState && runState.aborted) {
+            emitLog("Extraction aborted by user gracefully. Exiting loop.");
+            break;
+        }
         try {
             emitLog(`Fetching records starting at offset ${start}...`);
             const res = await axios.get(`https://${cleanDomain}/vis-api/vis/v3/en/search`, {
