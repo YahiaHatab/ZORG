@@ -78,10 +78,18 @@ app.post('/run', async (req, res) => {
     let rawRecords = [];
 
     let runState = { aborted: false };
-    req.on('close', () => {
-        if (!res.writableEnded) {
+
+    // Listen for explicit abort requests from the client (fetch aborted)
+    req.on('aborted', () => {
+        runState.aborted = true;
+        emitLog("Client manually aborted the request. Halting operation...");
+    });
+
+    // Also catch if the underlying socket closes before we could send the response
+    res.on('close', () => {
+        if (!res.writableEnded && !runState.aborted) {
             runState.aborted = true;
-            emitLog("Client connection closed. Operation ABORTED.");
+            emitLog("Client connection lost early. Operation ABORTED.");
         }
     });
 
