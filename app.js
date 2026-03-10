@@ -1026,7 +1026,7 @@ app.get('/', (req, res) => {
                         document.getElementById('upId').readOnly = true; // prevent changing ID of existing engine
                         document.getElementById('upName').value = data.name;
                         document.getElementById('upCategory').value = data.category || "Custom";
-                        document.getElementById('upInputType').value = data.inputType || "Custom Input";
+                        document.getElementById('upInputType').value = data.inputType !== undefined ? data.inputType : "Custom Input";
                         document.getElementById('upInst').value = data.instruction || "";
                         document.getElementById('upCode').value = data.code;
                         
