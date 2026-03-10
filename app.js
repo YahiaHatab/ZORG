@@ -1171,7 +1171,7 @@ app.get('/', (req, res) => {
                         
                         loader.classList.add('hidden');
                         completeText.classList.remove('hidden');
-                        showSuccessModal(recordCount);
+                        // showSuccessModal(recordCount); // Disabled as per user request
                     } catch (err) {
                         if (err.name === 'AbortError') return;
                         loader.classList.add('hidden');
