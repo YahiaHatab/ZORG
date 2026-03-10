@@ -674,18 +674,13 @@ app.get('/', (req, res) => {
                     
                     <div class="flex gap-3 relative">
                         <button id="btn" onclick="run()" class="w-full bg-blue-600 p-5 rounded-xl font-black text-xl hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/20 active:scale-95 tracking-tight">EXECUTE ARCHITECT</button>
-                        
-                        <!-- TEST MODE TOGGLE -->
-                        <div class="flex items-center justify-center bg-slate-800 border border-slate-700 rounded-xl px-4 shadow-lg shadow-black/40" title="Test Mode (Max 5 items extracted)">
-                             <label class="relative inline-flex items-center cursor-pointer group">
-                                 <input type="checkbox" id="testModeToggle" class="sr-only peer">
-                                 <div class="w-11 h-6 bg-slate-900 border border-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-400 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white shadow-inner"></div>
-                                 <span class="ml-2 mt-0.5 text-[10px] font-black uppercase tracking-widest text-slate-500 select-none peer-checked:text-purple-400 transition-colors">Test</span>
-                             </label>
-                        </div>
 
                         <button id="stopBtn" onclick="stopRun()" class="w-20 bg-slate-800 text-red-500 border border-slate-700 hover:border-red-500/50 hover:bg-slate-700 transition-all rounded-xl focus:outline-none flex items-center justify-center shrink-0 shadow-lg shadow-black/40 pointer-events-none opacity-50" title="Emergency Stop">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg>
+                        </button>
+                        
+                        <button id="clearInputsBtn" onclick="clearInputs()" class="w-16 bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-500 hover:text-white hover:bg-slate-700 transition-all rounded-xl focus:outline-none flex items-center justify-center shrink-0 shadow-lg shadow-black/40" title="Clear All Inputs">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                     </div>
                     
@@ -707,7 +702,17 @@ app.get('/', (req, res) => {
                         <div id="telemetry" class="bg-black border border-slate-700 rounded-xl p-3 h-40 overflow-y-auto font-mono text-[10px] text-green-400 shadow-inner break-words"></div>
                     </div>
                 </div>
-                <div class="mt-8 flex justify-center"><button onclick="shutdown()" class="text-slate-600 hover:text-red-500 text-[10px] font-bold transition-colors">TERMINATE SESSION</button></div>
+                
+                <div class="mt-8 flex justify-center items-center gap-6">
+                    <!-- TEST MODE TEXT TOGGLE -->
+                    <label class="cursor-pointer group flex items-center gap-2" title="Test Mode (Max 5 items extracted)">
+                        <input type="checkbox" id="testModeToggle" class="sr-only peer">
+                        <div class="w-2.5 h-2.5 rounded-full bg-slate-700 peer-checked:bg-purple-500 transition-colors"></div>
+                        <span class="text-slate-600 hover:text-purple-400 text-[10px] font-bold transition-colors select-none peer-checked:text-purple-400">TEST MODE</span>
+                    </label>
+                
+                    <button onclick="shutdown()" class="text-slate-600 hover:text-red-500 text-[10px] font-bold transition-colors">TERMINATE SESSION</button>
+                </div>
             </div>
 
             <script>
@@ -1096,6 +1101,16 @@ app.get('/', (req, res) => {
                     const stopBtn = document.getElementById('stopBtn');
                     stopBtn.classList.add('pointer-events-none', 'opacity-50');
                     stopBtn.classList.remove('bg-red-600/20', 'border-red-500');
+                }
+
+                function clearInputs() {
+                    const idsToClear = ['url', 'curl', 'token', 'cadEventId', 'cadClientId', 'cadEventKey', 'dynamicShowId', 'cookie', 'file'];
+                    idsToClear.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.value = '';
+                    });
+                    document.querySelectorAll('.custom-dynamic-input').forEach(el => el.value = '');
+                    showToast("Input fields cleared.", "success");
                 }
 
                 async function run() {
