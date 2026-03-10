@@ -1013,8 +1013,8 @@ app.get('/', (req, res) => {
                             const res = await fetch('/delete-engine/' + id, { method: 'DELETE' });
                             const data = await res.json();
                             if(!res.ok) throw new Error(data.error || "Failed to delete.");
-                            await showToast(data.message, "success");
-                            window.location.reload();
+                            showToast(data.message, "success");
+                            setTimeout(() => window.location.reload(), 800);
                         } catch (err) {
                             showToast("Error: " + err.message, "error");
                         }
@@ -1045,8 +1045,8 @@ app.get('/', (req, res) => {
                         if(!res.ok) throw new Error(data.error);
                         
                         closeUploadModal();
-                        await showToast(data.message, "success");
-                        window.location.reload();
+                        showToast(data.message, "success");
+                        setTimeout(() => window.location.reload(), 800);
                     } catch (e) {
                         showToast("Error: " + e.message, "error");
                     }
