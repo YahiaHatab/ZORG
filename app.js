@@ -512,6 +512,34 @@ app.get('/', (req, res) => {
             </style>
         </head>
         <body class="bg-slate-950 bg-[url('/Icons/Background.png')] bg-cover bg-center bg-fixed bg-no-repeat text-white min-h-screen flex items-center justify-center p-6 relative font-sans before:fixed before:inset-0 before:bg-slate-950/60 before:-z-10">
+            <!-- USER PROFILE WIDGET -->
+            <div id="userProfile" class="absolute top-6 left-6 z-[60] flex hidden items-center gap-4 bg-slate-900/60 p-3 pr-6 rounded-2xl border border-slate-700/50 shadow-xl backdrop-blur-md transition-all">
+                <div class="h-10 w-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                </div>
+                <div>
+                    <h3 id="profileName" class="font-black text-sm text-slate-200 tracking-wide uppercase">Hi, Agent</h3>
+                    <p class="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-0.5">Shows Scraped Today: <span id="scrapeCount" class="text-blue-400">0</span></p>
+                </div>
+            </div>
+
+            <!-- LOGIN OVERLAY -->
+            <div id="loginOverlay" class="fixed inset-0 z-[200] flex hidden items-center justify-center bg-slate-950/80 backdrop-blur-md border border-slate-800 transition-opacity duration-500">
+                <div class="bg-slate-900/90 p-8 rounded-3xl border border-blue-900/50 shadow-[0_0_100px_rgba(0,0,0,0.8)] max-w-sm w-full transform transition-all text-center">
+                    <div class="flex justify-center mb-6">
+                        <div class="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-600/30">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        </div>
+                    </div>
+                    <h2 class="text-2xl font-black text-white mb-2 tracking-tighter uppercase">ZORG-Ω Access</h2>
+                    <p class="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-8">Identify yourself to proceed</p>
+                    
+                    <input id="loginName" type="text" placeholder="Designation (Your Name)" class="w-full p-4 rounded-xl bg-slate-950 border border-slate-700 outline-none text-center font-bold text-lg focus:border-blue-500 shadow-inner mb-6 transition-colors" autocomplete="off" onkeydown="if(event.key === 'Enter') handleLogin()">
+                    
+                    <button onclick="handleLogin()" class="w-full bg-blue-600 p-4 rounded-xl font-black text-sm hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/40 active:scale-95 tracking-widest uppercase mb-4">INITIALIZE</button>
+                </div>
+            </div>
+
             <!-- CUSTOM MESSAGES / PROMPTS MODAL -->
             <div id="customDialogModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[100] p-4">
                 <div class="bg-slate-900/95 backdrop-blur-2xl p-6 rounded-2xl border border-blue-500/50 shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-sm transform transition-all">
@@ -1062,6 +1090,78 @@ app.get('/', (req, res) => {
                     }
                 }
 
+                // --- USER PROFILE & LOGIN LOGIC ---
+                let zUsername = '';
+                let zScrapeCount = 0;
+
+                function initProfile() {
+                    const storedName = localStorage.getItem('zorg_username');
+                    const storedDate = localStorage.getItem('zorg_last_scrape_date');
+                    const storedCount = localStorage.getItem('zorg_scrape_count');
+                    
+                    const today = new Date().toDateString();
+                    
+                    if (!storedName) {
+                        // Unauthenticated - show modal
+                        document.getElementById('loginOverlay').classList.remove('hidden');
+                        setTimeout(() => {
+                            document.getElementById('loginOverlay').classList.remove('opacity-0');
+                            document.getElementById('loginCard').classList.remove('translate-y-4', 'opacity-0');
+                            document.getElementById('loginName').focus();
+                        }, 50);
+                    } else {
+                        zUsername = storedName;
+                        
+                        if (storedDate !== today) {
+                            // Reset counter for a new day
+                            zScrapeCount = 0;
+                            localStorage.setItem('zorg_last_scrape_date', today);
+                            localStorage.setItem('zorg_scrape_count', '0');
+                        } else {
+                            zScrapeCount = parseInt(storedCount) || 0;
+                        }
+                        
+                        updateProfileUI();
+                    }
+                }
+
+                function handleLogin() {
+                    const nameInput = document.getElementById('loginName').value.trim();
+                    if (!nameInput) {
+                        showToast("Designation required.", "error");
+                        return;
+                    }
+                    
+                    zUsername = nameInput;
+                    zScrapeCount = 0;
+                    
+                    localStorage.setItem('zorg_username', nameInput);
+                    localStorage.setItem('zorg_last_scrape_date', new Date().toDateString());
+                    localStorage.setItem('zorg_scrape_count', '0');
+                    
+                    document.getElementById('loginOverlay').classList.add('opacity-0');
+                    setTimeout(() => {
+                        document.getElementById('loginOverlay').classList.add('hidden');
+                        updateProfileUI();
+                        showToast(\`Welcome back, Agent \${zUsername}.\`, "success");
+                    }, 500);
+                }
+
+                function updateProfileUI() {
+                    document.getElementById('userProfile').classList.remove('hidden');
+                    document.getElementById('profileName').innerText = \`Hi, \${zUsername}\`;
+                    document.getElementById('scrapeCount').innerText = zScrapeCount;
+                }
+
+                function incrementScrapeCount() {
+                    zScrapeCount++;
+                    document.getElementById('scrapeCount').innerText = zScrapeCount;
+                    localStorage.setItem('zorg_scrape_count', zScrapeCount.toString());
+                }
+
+                // Initialize on load
+                initProfile();
+
                 let logInterval;
                 let abortController;
                 let autoScrollTelemetry = true;
@@ -1187,6 +1287,7 @@ app.get('/', (req, res) => {
                         loader.classList.add('hidden');
                         completeText.classList.remove('hidden');
                         // showSuccessModal(recordCount); // Disabled as per user request
+                        incrementScrapeCount();
                     } catch (err) {
                         if (err.name === 'AbortError') return;
                         loader.classList.add('hidden');
