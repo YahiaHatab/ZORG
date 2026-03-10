@@ -171,13 +171,18 @@ app.post('/run', async (req, res) => {
 
         emitLog(`Structuring, standardizing, and deduplicating ${rawRecords.length} items...`);
 
-        const clean = (val) => (val === 'N/A' || !val) ? '' : String(val).trim();
+        const clean = (val) => {
+            if (val === undefined || val === null) return 'N/A';
+            const str = String(val).trim();
+            if (str === '' || str.toUpperCase() === 'N/A' || str.toUpperCase() === 'NULL' || str.toUpperCase() === 'UNDEFINED') return 'N/A';
+            return str;
+        };
         const mergedRecordsMap = new Map();
 
         rawRecords.forEach(item => {
             const rawName = item["Company Name"];
             const cleanName = clean(rawName);
-            if (!cleanName) return;
+            if (cleanName === 'N/A') return;
 
             const uniqueKey = cleanName.toLowerCase();
 
@@ -185,8 +190,8 @@ app.post('/run', async (req, res) => {
                 const existingEntry = mergedRecordsMap.get(uniqueKey);
                 const newBooth = clean(item["Booth"]);
 
-                if (newBooth && !existingEntry["Booth"].includes(newBooth)) {
-                    existingEntry["Booth"] = existingEntry["Booth"]
+                if (newBooth !== 'N/A' && !existingEntry["Booth"].includes(newBooth)) {
+                    existingEntry["Booth"] = existingEntry["Booth"] !== 'N/A'
                         ? `${existingEntry["Booth"]}, ${newBooth}`
                         : newBooth;
                 }
