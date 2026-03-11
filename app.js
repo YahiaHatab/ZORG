@@ -491,6 +491,8 @@ app.get('/', (req, res) => {
             <script src="/socket.io/socket.io.js"></script>
             <style>
                 @keyframes bounce { 0%, 80%, 100% { transform: scale(0); opacity: 0.3; } 40% { transform: scale(1.0); opacity: 1; } }
+                @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+                .fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
                 .dot { display: inline-block; width: 10px; height: 10px; background-color: #10b981; border-radius: 100%; animation: bounce 1.4s infinite ease-in-out both; }
                 .dot1 { animation-delay: -0.32s; } .dot2 { animation-delay: -0.16s; }
                 #telemetry::-webkit-scrollbar { width: 6px; }
@@ -528,13 +530,24 @@ app.get('/', (req, res) => {
                 </div>
             </div>
 
-            <!-- ONLINE SIDEBAR -->
-            <div id="onlineSidebar" class="absolute top-6 right-6 bottom-6 w-64 bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-4 shadow-xl z-[40] hidden sm:flex flex-col transition-all">
-                <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-2">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Online Now
-                </h3>
-                <div id="onlineList" class="flex-1 overflow-y-auto space-y-2 dropdown-scroll pr-1">
-                    <!-- Users injected here -->
+            <!-- ONLINE & UPDATES SIDEBAR -->
+            <div id="onlineSidebar" class="absolute top-6 right-6 bottom-6 w-72 bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-4 shadow-xl z-[40] hidden sm:flex flex-col transition-all gap-4">
+                <div class="flex-1 flex flex-col min-h-[40%]">
+                    <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Online Now
+                    </h3>
+                    <div id="onlineList" class="flex-1 overflow-y-auto space-y-2 dropdown-scroll pr-1">
+                        <!-- Users injected here -->
+                    </div>
+                </div>
+                
+                <div class="flex-1 flex flex-col min-h-[40%] border-t border-slate-700/50 pt-4">
+                    <h3 class="text-xs font-black text-purple-400 uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-2">
+                        <span class="w-2 h-2 rounded-full bg-purple-500"></span> System Updates
+                    </h3>
+                    <div id="updatesList" class="flex-1 overflow-y-auto space-y-3 dropdown-scroll pr-1">
+                        <!-- Logs injected here -->
+                    </div>
                 </div>
             </div>
 
@@ -660,6 +673,21 @@ app.get('/', (req, res) => {
 
                 <div class="space-y-4">
                     
+                    <div id="adminUpdatePanel" class="hidden p-4 bg-slate-900/50 rounded-xl border border-purple-900/50 shadow-inner">
+                        <div class="flex justify-between items-end mb-2">
+                            <label class="text-[10px] font-bold text-purple-400 uppercase tracking-widest pl-1 block">Broadcast System Update [Admin]</label>
+                        </div>
+                        <div class="flex gap-2">
+                            <select id="adminUpdateCategory" class="w-24 p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs text-slate-300">
+                                <option value="Update">Update</option>
+                                <option value="Alert">Alert</option>
+                                <option value="Fix">Fix</option>
+                            </select>
+                            <input id="adminUpdateText" type="text" placeholder="Type system broadcast message..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs text-slate-200" onkeydown="if(event.key === 'Enter') broadcastUpdate()">
+                            <button onclick="broadcastUpdate()" class="px-5 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl transition-colors shadow-lg shadow-purple-900/40 uppercase tracking-widest">Post</button>
+                        </div>
+                    </div>
+
                     <div class="flex gap-3 items-center relative">
                         <input type="hidden" id="mode" value="marketplace">
                         
@@ -1349,10 +1377,109 @@ app.get('/', (req, res) => {
                         }).join('');
                     }
                 });
+
+                function createUpdateHtml(u) {
+                    const date = new Date(u.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    let color = "text-purple-400";
+                    let bg = "bg-purple-900/10";
+                    let border = "border-purple-500/20";
+                    if(u.category === 'Alert') { color = "text-red-400"; bg = "bg-red-900/10"; border="border-red-500/20";}
+                    if(u.category === 'Fix') { color = "text-emerald-400"; bg = "bg-emerald-900/10"; border="border-emerald-500/20";}
+                    
+                    return \`
+                        <div class="p-3 rounded-xl border \${border} \${bg} shadow-inner fade-in-up">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[9px] font-black uppercase tracking-widest \${color}">\${u.category}</span>
+                                <span class="text-[8px] font-mono text-slate-500">\${date}</span>
+                            </div>
+                            <p class="text-[11px] text-slate-300 font-medium leading-tight">\${u.text}</p>
+                            <div class="text-[8px] text-slate-500 font-bold uppercase tracking-widest mt-1.5 text-right">- \${u.author}</div>
+                        </div>
+                    \`;
+                }
+
+                window.zorgSocket.on('init-data', (data) => {
+                    if (data.isAdmin) {
+                        document.getElementById('adminUpdatePanel').classList.remove('hidden');
+                    }
+                    if (data.logs && data.logs.length > 0) {
+                        const listEl = document.getElementById('updatesList');
+                        listEl.innerHTML = data.logs.map(createUpdateHtml).join('');
+                    }
+                });
+
+                window.zorgSocket.on('new-system-update', (log) => {
+                    const listEl = document.getElementById('updatesList');
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = createUpdateHtml(log);
+                    listEl.prepend(wrapper.firstElementChild);
+                    showToast(\`[\${log.category.toUpperCase()}] System Update Broadcasted\`, log.category === 'Alert' ? 'error' : 'success');
+                });
+
+                async function broadcastUpdate() {
+                    const text = document.getElementById('adminUpdateText').value.trim();
+                    const category = document.getElementById('adminUpdateCategory').value;
+                    if(!text) return;
+                    
+                    try {
+                        const res = await fetch('/admin/add-log', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({text, category})
+                        });
+                        const data = await res.json();
+                        if(!res.ok) throw new Error(data.error);
+                        document.getElementById('adminUpdateText').value = '';
+                    } catch (e) {
+                        showToast(e.message, "error");
+                    }
+                }
             </script>
         </body>
         </html>
     `);
+});
+
+// --- SYSTEM UPDATES LOGIC ---
+const logsFile = path.join(__dirname, 'logs.json');
+let systemLogs = [];
+try {
+    if (fs.existsSync(logsFile)) {
+        systemLogs = JSON.parse(fs.readFileSync(logsFile, 'utf8'));
+    } else {
+        fs.writeFileSync(logsFile, JSON.stringify([]));
+    }
+} catch (e) {
+    console.error("Error loading logs.json", e);
+}
+
+app.post('/admin/add-log', (req, res) => {
+    let ip = req.socket.remoteAddress || req.ip;
+    if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+    
+    let userEntry = savedUsers[ip];
+    let isAdmin = false;
+    let authorName = "Admin";
+    if (userEntry && typeof userEntry === 'object' && userEntry.role === 'admin') {
+        isAdmin = true;
+        authorName = userEntry.name;
+    }
+    
+    if (!isAdmin) {
+        return res.status(403).json({ error: "Unauthorized. Admin privileges required." });
+    }
+    
+    const { text, category } = req.body;
+    if (!text || !category) return res.status(400).json({ error: "Missing text or category." });
+    
+    const newUpdate = { text, category, date: new Date().toISOString(), author: authorName };
+    
+    systemLogs.unshift(newUpdate);
+    if (systemLogs.length > 50) systemLogs = systemLogs.slice(0, 50);
+    fs.writeFileSync(logsFile, JSON.stringify(systemLogs, null, 2));
+    
+    io.emit('new-system-update', newUpdate);
+    res.json({ success: true, message: "System update broadcasted." });
 });
 
 // --- SOCKET.IO REAL-TIME ONLINE SYSTEM ---
@@ -1373,8 +1500,23 @@ io.on('connection', (socket) => {
     if (ip.startsWith('::ffff:')) ip = ip.substring(7);
 
     // If IP known, register them immediately
-    if (savedUsers[ip]) {
-        activeUsers[socket.id] = { id: socket.id, name: savedUsers[ip], ip: ip };
+    let userEntry = savedUsers[ip];
+    let uName = "";
+    let isAdmin = false;
+
+    if (userEntry) {
+        if (typeof userEntry === 'string') {
+            uName = userEntry;
+        } else {
+            uName = userEntry.name;
+            if (userEntry.role === 'admin') isAdmin = true;
+        }
+    }
+
+    socket.emit('init-data', { isAdmin, logs: systemLogs.slice(0, 10) });
+
+    if (uName) {
+        activeUsers[socket.id] = { id: socket.id, name: uName, ip: ip };
         io.emit('online-users', Object.values(activeUsers));
     } else {
         socket.emit('request-name');
@@ -1383,11 +1525,12 @@ io.on('connection', (socket) => {
     socket.on('register-name', (name) => {
         if (!name || !name.trim()) return;
         const cleanName = name.trim();
-        savedUsers[ip] = cleanName;
+        savedUsers[ip] = { name: cleanName, role: 'user' };
         fs.writeFileSync(usersFile, JSON.stringify(savedUsers, null, 2));
 
         activeUsers[socket.id] = { id: socket.id, name: cleanName, ip: ip };
         io.emit('online-users', Object.values(activeUsers));
+        socket.emit('init-data', { isAdmin: false, logs: systemLogs.slice(0, 10) });
     });
 
     socket.on('disconnect', () => {
