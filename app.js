@@ -613,17 +613,8 @@ app.get('/', (req, res) => {
                     </div>
                 </div>
                 
-                <div class="flex-1 flex flex-col min-h-[40%] border-t border-slate-700/50 pt-4">
-                    <h3 class="text-xs font-black text-purple-400 uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-2">
-                        <span class="w-2 h-2 rounded-full bg-purple-500"></span> System Updates
-                    </h3>
-                    <div id="updatesList" class="flex-1 overflow-y-auto space-y-3 dropdown-scroll pr-1">
-                        <!-- Logs injected here -->
-                    </div>
-                </div>
-
-                <!-- WHISPER BOX UI -->
-                <div id="whisperBox" class="hidden shrink-0 flex-col bg-slate-950/50 border-t border-slate-700/50 p-3 mt-2 rounded-xl">
+                <!-- WHISPER BOX UI moved right here underneath onlineNow to keep it high -->
+                <div id="whisperBox" class="hidden shrink-0 flex-col bg-slate-950/50 border-t border-b border-slate-700/50 p-3 mb-2 rounded-xl">
                     <div class="flex items-center justify-between mb-2">
                         <span id="whisperTargetUi" class="text-[10px] font-black uppercase text-purple-400 tracking-widest">Message to User</span>
                         <button onclick="closeWhisper()" class="text-slate-500 hover:text-red-400 transition-colors" title="Close">
@@ -637,6 +628,16 @@ app.get('/', (req, res) => {
                         </button>
                     </div>
                 </div>
+
+                <div class="flex-1 flex flex-col min-h-[40%] border-t border-slate-700/50 pt-4">
+                    <h3 class="text-xs font-black text-purple-400 uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-2">
+                        <span class="w-2 h-2 rounded-full bg-purple-500"></span> System Updates
+                    </h3>
+                    <div id="updatesList" class="flex-1 overflow-y-auto space-y-3 dropdown-scroll pr-1">
+                        <!-- Logs injected here -->
+                    </div>
+                </div>
+
             </div>
 
             <!-- LOGIN OVERLAY -->
@@ -882,7 +883,7 @@ app.get('/', (req, res) => {
                 }
                 
                 // -- CUSTOM DIALOG LOGIC --
-                function showToast(message, type = 'success') {
+                function showToast(message, type = 'success', onClickAction = '') {
                     return new Promise(resolve => {
                         const container = document.getElementById('toastContainer');
                         const toast = document.createElement('div');
@@ -910,6 +911,7 @@ app.get('/', (req, res) => {
                         }
 
                         toast.className = 'transform transition-all duration-300 translate-x-12 opacity-0 flex items-start gap-4 p-4 rounded-xl border shadow-2xl backdrop-blur-xl w-80 pointer-events-auto ' + bgClass;
+                        if (onClickAction) toast.setAttribute('onclick', onClickAction);
                         toast.innerHTML = 
                             '<div class="shrink-0 ' + iconClass + ' mt-0.5">' + iconSvg + '</div>' +
                             '<div class="flex-1">' +
@@ -1250,6 +1252,7 @@ app.get('/', (req, res) => {
                     }
                     
                     zUsername = nameInput;
+                    requestNotificationPermission();
                     if (window.zorgSocket) window.zorgSocket.emit('register-name', nameInput);
                     
                     document.getElementById('loginOverlay').classList.add('opacity-0');
@@ -1440,6 +1443,14 @@ app.get('/', (req, res) => {
                     }, 50);
                 });
 
+                function requestNotificationPermission() {
+                    if ("Notification" in window) {
+                        if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+                            Notification.requestPermission();
+                        }
+                    }
+                }
+
                 let currentOnlineUsers = [];
                 let activeEnginesMap = {};
                 let isManualAway = false;
@@ -1514,8 +1525,17 @@ app.get('/', (req, res) => {
                 window.setChatTarget = function(id, name) {
                     activeWhisperTargetId = id;
                     document.getElementById('whisperTargetUi').innerText = 'Messaging: ' + name;
-                    document.getElementById('whisperBox').classList.replace('hidden', 'flex');
-                    document.getElementById('whisperInput').focus();
+                    
+                    const whisperBox = document.getElementById('whisperBox');
+                    whisperBox.classList.replace('hidden', 'flex');
+                    
+                    setTimeout(() => {
+                        const sidebar = document.getElementById('onlineSidebar');
+                        const input = document.getElementById('whisperInput');
+                        
+                        input.focus();
+                        if (sidebar) sidebar.scrollTop = sidebar.scrollHeight;
+                    }, 50);
                 };
 
                 function closeWhisper() {
@@ -1557,14 +1577,27 @@ app.get('/', (req, res) => {
                     } catch(e) {}
                     
                     const safeName = data.from.replace(/'/g, "\\'");
-                    const msgHtml = \`<div onclick="setChatTarget('\${data.fromId}', '\${safeName}')" class="w-full h-full"><span class="text-slate-400 text-[10px] block mb-1">From \${data.from}: <i class="text-slate-500 lowercase">(Click to reply)</i></span> \${data.message}</div>\`;
-                    showToast(msgHtml, 'whisper');
+                    const msgHtml = \`<span class="text-slate-400 text-[10px] block mb-1">From \${data.from}: <i class="text-slate-500 lowercase">(Click to reply)</i></span> \${data.message}\`;
+                    showToast(msgHtml, 'whisper', \`setChatTarget('\${data.fromId}', '\${safeName}')\`);
 
                     const userCard = document.getElementById('user-card-' + data.fromId);
                     if (userCard) {
                         userCard.classList.remove('highlight-pulse');
                         void userCard.offsetWidth; // Trigger reflow
                         userCard.classList.add('highlight-pulse');
+                    }
+
+                    if (document.visibilityState === 'hidden' && "Notification" in window && Notification.permission === "granted") {
+                        const notification = new Notification("ZORG-Ω Message", {
+                            body: \`\${data.from}: \${data.message}\`,
+                            icon: '/Icons/favicon.ico'
+                        });
+                        
+                        notification.onclick = function() {
+                            window.focus();
+                            setChatTarget(data.fromId, safeName);
+                            this.close();
+                        };
                     }
                 });
 
