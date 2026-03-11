@@ -1409,6 +1409,23 @@ app.get('/', (req, res) => {
 
                 let currentOnlineUsers = [];
                 let activeEnginesMap = {};
+                let isManualAway = false;
+
+                function toggleStatusManual() {
+                    isManualAway = !isManualAway;
+                    const newStatus = isManualAway ? 'away' : 'online';
+                    window.zorgSocket.emit('update-presence', newStatus);
+                }
+
+                document.addEventListener('visibilitychange', () => {
+                    if (isManualAway) return;
+                    
+                    if (document.visibilityState === 'hidden') {
+                        window.zorgSocket.emit('update-presence', 'away');
+                    } else if (document.visibilityState === 'visible') {
+                        window.zorgSocket.emit('update-presence', 'online');
+                    }
+                });
 
                 function renderOnlineUsers() {
                     const listEl = document.getElementById('onlineList');
@@ -1419,11 +1436,21 @@ app.get('/', (req, res) => {
 
                         let engStatusText = '🟢 Online';
                         let engStatusColor = 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)] animate-pulse';
+
+                        if (u.status === 'away') {
+                            engStatusText = '🌙 Away';
+                            engStatusColor = 'bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.8)]';
+                        }
                         
                         const engEntry = Object.values(activeEnginesMap).find(e => e.socketId === u.id);
                         if (engEntry) {
-                            engStatusText = \`🛠️ Using \${engEntry.engineName || engEntry.mode}\`;
+                            engStatusText = '🛠️ Using ' + (engEntry.engineName || engEntry.mode);
                             engStatusColor = 'bg-orange-500 shadow-[0_0_5px_rgba(249,115,22,0.8)] animate-pulse';
+                        }
+
+                        let dotHtml = '<div class="w-2 h-2 rounded-full ' + engStatusColor + ' shrink-0"></div>';
+                        if (isMe) {
+                            dotHtml = '<button onclick="toggleStatusManual()" class="w-4 h-4 flex items-center justify-center rounded-full hover:scale-125 transition-transform shrink-0" title="Click to manually toggle Away/Online"><div class="w-2 h-2 rounded-full ' + engStatusColor + ' pointer-events-none"></div></button>';
                         }
 
                         return \`
@@ -1435,7 +1462,7 @@ app.get('/', (req, res) => {
                                     <div class="text-[11px] font-bold truncate \${isMe ? 'text-blue-400' : 'text-slate-200'}">\${u.name} \${isMe ? '<span class="text-[9px] text-slate-500 font-mono ml-1">(You)</span>' : ''}</div>
                                     <div class="text-[9px] font-mono text-slate-400 font-bold truncate">\${engStatusText}</div>
                                 </div>
-                                <div class="w-2 h-2 rounded-full \${engStatusColor} shrink-0"></div>
+                                \${dotHtml}
                             </div>
                         \`;
                     }).join('');
@@ -1740,7 +1767,7 @@ io.on('connection', (socket) => {
     socket.emit('init-data', { isAdmin, logs: systemLogs.slice(0, 10), activeEngines, engineCount });
 
     if (uName) {
-        activeUsers[socket.id] = { id: socket.id, name: uName, ip: ip };
+        activeUsers[socket.id] = { id: socket.id, name: uName, ip: ip, status: 'online' };
         io.emit('online-users', Object.values(activeUsers));
     } else {
         socket.emit('request-name');
@@ -1752,7 +1779,7 @@ io.on('connection', (socket) => {
         savedUsers[ip] = { name: cleanName, role: 'user' };
         fs.writeFileSync(usersFile, JSON.stringify(savedUsers, null, 2));
 
-        activeUsers[socket.id] = { id: socket.id, name: cleanName, ip: ip };
+        activeUsers[socket.id] = { id: socket.id, name: cleanName, ip: ip, status: 'online' };
         io.emit('online-users', Object.values(activeUsers));
         
         let deletedEnginesCount = 0;
@@ -1769,6 +1796,13 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         if (activeUsers[socket.id]) {
             delete activeUsers[socket.id];
+            io.emit('online-users', Object.values(activeUsers));
+        }
+    });
+
+    socket.on('update-presence', (status) => {
+        if (activeUsers[socket.id]) {
+            activeUsers[socket.id].status = status;
             io.emit('online-users', Object.values(activeUsers));
         }
     });
