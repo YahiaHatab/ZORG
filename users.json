@@ -2,5 +2,9 @@
   "127.0.0.1": {
     "name": "Yahia",
     "role": "admin"
+  },
+  "100.94.4.91": {
+    "name": "TestUser",
+    "role": "user"
   }
 }

@@ -519,14 +519,34 @@ app.get('/', (req, res) => {
             </style>
         </head>
         <body class="bg-slate-950 bg-[url('/Icons/Background.png')] bg-cover bg-center bg-fixed bg-no-repeat text-white min-h-screen flex items-center justify-center p-6 relative font-sans before:fixed before:inset-0 before:bg-slate-950/60 before:-z-10">
-            <!-- USER PROFILE WIDGET -->
-            <div id="userProfile" class="absolute top-6 left-6 z-[60] flex hidden items-center gap-4 bg-slate-900/60 p-3 pr-6 rounded-2xl border border-slate-700/50 shadow-xl backdrop-blur-md transition-all">
-                <div class="h-10 w-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+            <!-- TOP LEFT CORNER WIDGETS -->
+            <div class="absolute top-6 left-6 z-[60] flex items-center gap-4">
+                <!-- USER PROFILE WIDGET -->
+                <div id="userProfile" class="flex hidden items-center gap-4 bg-slate-900/60 p-3 pr-6 rounded-2xl border border-slate-700/50 shadow-xl backdrop-blur-md transition-all">
+                    <div class="h-10 w-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    </div>
+                    <div>
+                        <h3 id="profileName" class="font-black text-sm text-slate-200 tracking-wide uppercase">Hi, Agent</h3>
+                        <p class="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-0.5">Shows Scraped Today: <span id="scrapeCount" class="text-blue-400">0</span></p>
+                    </div>
                 </div>
-                <div>
-                    <h3 id="profileName" class="font-black text-sm text-slate-200 tracking-wide uppercase">Hi, Agent</h3>
-                    <p class="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-0.5">Shows Scraped Today: <span id="scrapeCount" class="text-blue-400">0</span></p>
+
+                <!-- ADMIN BROADCAST WIDGET -->
+                <div id="adminUpdatePanel" class="hidden flex items-center bg-slate-900/70 p-2 rounded-2xl border border-purple-900/50 shadow-xl backdrop-blur-md transition-all">
+                    <button onclick="toggleAdminPanel()" class="w-10 h-10 shrink-0 rounded-xl bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 flex items-center justify-center transition-colors border border-purple-500/30" title="Broadcast System Update">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
+                    </button>
+                    
+                    <div id="adminUpdateInputs" class="flex items-center overflow-hidden transition-all duration-300 max-w-0 opacity-0 whitespace-nowrap">
+                        <select id="adminUpdateCategory" class="w-24 p-2.5 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs text-slate-300 ml-2 shadow-inner">
+                            <option value="Update">Update</option>
+                            <option value="Alert">Alert</option>
+                            <option value="Fix">Fix</option>
+                        </select>
+                        <input id="adminUpdateText" type="text" placeholder="Type system broadcast message..." class="w-64 p-2.5 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs text-slate-200 shadow-inner ml-2" onkeydown="if(event.key === 'Enter') broadcastUpdate()">
+                        <button onclick="broadcastUpdate()" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl transition-colors shadow-lg shadow-purple-900/40 uppercase tracking-widest shrink-0 ml-2">Post</button>
+                    </div>
                 </div>
             </div>
 
@@ -673,21 +693,6 @@ app.get('/', (req, res) => {
 
                 <div class="space-y-4">
                     
-                    <div id="adminUpdatePanel" class="hidden p-4 bg-slate-900/50 rounded-xl border border-purple-900/50 shadow-inner">
-                        <div class="flex justify-between items-end mb-2">
-                            <label class="text-[10px] font-bold text-purple-400 uppercase tracking-widest pl-1 block">Broadcast System Update [Admin]</label>
-                        </div>
-                        <div class="flex gap-2">
-                            <select id="adminUpdateCategory" class="w-24 p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs text-slate-300">
-                                <option value="Update">Update</option>
-                                <option value="Alert">Alert</option>
-                                <option value="Fix">Fix</option>
-                            </select>
-                            <input id="adminUpdateText" type="text" placeholder="Type system broadcast message..." class="flex-1 p-3 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs text-slate-200" onkeydown="if(event.key === 'Enter') broadcastUpdate()">
-                            <button onclick="broadcastUpdate()" class="px-5 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl transition-colors shadow-lg shadow-purple-900/40 uppercase tracking-widest">Post</button>
-                        </div>
-                    </div>
-
                     <div class="flex gap-3 items-center relative">
                         <input type="hidden" id="mode" value="marketplace">
                         
@@ -1416,6 +1421,18 @@ app.get('/', (req, res) => {
                     showToast(\`[\${log.category.toUpperCase()}] System Update Broadcasted\`, log.category === 'Alert' ? 'error' : 'success');
                 });
 
+                function toggleAdminPanel() {
+                    const inputs = document.getElementById('adminUpdateInputs');
+                    if(inputs.classList.contains('max-w-0')) {
+                        inputs.classList.remove('max-w-0', 'opacity-0');
+                        inputs.classList.add('max-w-[400px]', 'opacity-100');
+                        setTimeout(() => document.getElementById('adminUpdateText').focus(), 300);
+                    } else {
+                        inputs.classList.add('max-w-0', 'opacity-0');
+                        inputs.classList.remove('max-w-[400px]', 'opacity-100');
+                    }
+                }
+
                 async function broadcastUpdate() {
                     const text = document.getElementById('adminUpdateText').value.trim();
                     const category = document.getElementById('adminUpdateCategory').value;
@@ -1430,6 +1447,7 @@ app.get('/', (req, res) => {
                         const data = await res.json();
                         if(!res.ok) throw new Error(data.error);
                         document.getElementById('adminUpdateText').value = '';
+                        toggleAdminPanel(); // Automatically collapse panel once updated!
                     } catch (e) {
                         showToast(e.message, "error");
                     }
@@ -1456,7 +1474,7 @@ try {
 app.post('/admin/add-log', (req, res) => {
     let ip = req.socket.remoteAddress || req.ip;
     if (ip.startsWith('::ffff:')) ip = ip.substring(7);
-    
+
     let userEntry = savedUsers[ip];
     let isAdmin = false;
     let authorName = "Admin";
@@ -1464,20 +1482,20 @@ app.post('/admin/add-log', (req, res) => {
         isAdmin = true;
         authorName = userEntry.name;
     }
-    
+
     if (!isAdmin) {
         return res.status(403).json({ error: "Unauthorized. Admin privileges required." });
     }
-    
+
     const { text, category } = req.body;
     if (!text || !category) return res.status(400).json({ error: "Missing text or category." });
-    
+
     const newUpdate = { text, category, date: new Date().toISOString(), author: authorName };
-    
+
     systemLogs.unshift(newUpdate);
     if (systemLogs.length > 50) systemLogs = systemLogs.slice(0, 50);
     fs.writeFileSync(logsFile, JSON.stringify(systemLogs, null, 2));
-    
+
     io.emit('new-system-update', newUpdate);
     res.json({ success: true, message: "System update broadcasted." });
 });
