@@ -4,6 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const { AsyncLocalStorage } = require('async_hooks');
 const axios = require('axios');
+const http = require('http');
+const { Server } = require('socket.io');
 
 const asyncLocalStorage = new AsyncLocalStorage();
 
@@ -31,6 +33,8 @@ if (typeof global.fetch === 'function') {
 // --- DYNAMIC ENGINES INJECTION READY ---
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 const PORT = 3000;
 
 app.use(express.json());
@@ -484,6 +488,7 @@ app.get('/', (req, res) => {
             <title>ZORG-Ω | Architect</title>
             <link rel="icon" type="image/x-icon" href="/Icons/favicon.ico">
             <script src="https://cdn.tailwindcss.com"></script>
+            <script src="/socket.io/socket.io.js"></script>
             <style>
                 @keyframes bounce { 0%, 80%, 100% { transform: scale(0); opacity: 0.3; } 40% { transform: scale(1.0); opacity: 1; } }
                 .dot { display: inline-block; width: 10px; height: 10px; background-color: #10b981; border-radius: 100%; animation: bounce 1.4s infinite ease-in-out both; }
@@ -520,6 +525,16 @@ app.get('/', (req, res) => {
                 <div>
                     <h3 id="profileName" class="font-black text-sm text-slate-200 tracking-wide uppercase">Hi, Agent</h3>
                     <p class="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-0.5">Shows Scraped Today: <span id="scrapeCount" class="text-blue-400">0</span></p>
+                </div>
+            </div>
+
+            <!-- ONLINE SIDEBAR -->
+            <div id="onlineSidebar" class="absolute top-6 right-6 bottom-6 w-64 bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-4 shadow-xl z-[40] hidden sm:flex flex-col transition-all">
+                <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Online Now
+                </h3>
+                <div id="onlineList" class="flex-1 overflow-y-auto space-y-2 dropdown-scroll pr-1">
+                    <!-- Users injected here -->
                 </div>
             </div>
 
@@ -622,7 +637,7 @@ app.get('/', (req, res) => {
                 </div>
             </div>
 
-            <div class="absolute bottom-4 right-6 text-slate-400/50 text-sm font-bold uppercase tracking-widest italic z-0 drop-shadow-lg">Powered by YahiaH</div>
+            <div class="absolute bottom-4 left-6 text-slate-400/50 text-sm font-bold uppercase tracking-widest italic z-0 drop-shadow-lg">Powered by YahiaH</div>
             <div class="bg-slate-900/85 backdrop-blur-xl p-8 rounded-2xl border border-slate-800/80 w-full max-w-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] z-10">
                 <div class="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
                     <div>
@@ -1095,36 +1110,20 @@ app.get('/', (req, res) => {
                 let zScrapeCount = 0;
 
                 function initProfile() {
-                    const storedName = localStorage.getItem('zorg_username');
                     const storedDate = localStorage.getItem('zorg_last_scrape_date');
                     const storedCount = localStorage.getItem('zorg_scrape_count');
-                    
                     const today = new Date().toDateString();
                     
-                    if (!storedName) {
-                        // Unauthenticated - show modal
-                        document.getElementById('loginOverlay').classList.remove('hidden');
-                        setTimeout(() => {
-                            document.getElementById('loginOverlay').classList.remove('opacity-0');
-                            document.getElementById('loginCard').classList.remove('translate-y-4', 'opacity-0');
-                            document.getElementById('loginName').focus();
-                        }, 50);
+                    if (storedDate !== today) {
+                        zScrapeCount = 0;
+                        localStorage.setItem('zorg_last_scrape_date', today);
+                        localStorage.setItem('zorg_scrape_count', '0');
                     } else {
-                        zUsername = storedName;
-                        
-                        if (storedDate !== today) {
-                            // Reset counter for a new day
-                            zScrapeCount = 0;
-                            localStorage.setItem('zorg_last_scrape_date', today);
-                            localStorage.setItem('zorg_scrape_count', '0');
-                        } else {
-                            zScrapeCount = parseInt(storedCount) || 0;
-                        }
-                        
-                        updateProfileUI();
+                        zScrapeCount = parseInt(storedCount) || 0;
                     }
+                    
+                    document.getElementById('scrapeCount').innerText = zScrapeCount;
                 }
-
                 function handleLogin() {
                     const nameInput = document.getElementById('loginName').value.trim();
                     if (!nameInput) {
@@ -1133,23 +1132,19 @@ app.get('/', (req, res) => {
                     }
                     
                     zUsername = nameInput;
-                    zScrapeCount = 0;
-                    
-                    localStorage.setItem('zorg_username', nameInput);
-                    localStorage.setItem('zorg_last_scrape_date', new Date().toDateString());
-                    localStorage.setItem('zorg_scrape_count', '0');
+                    if (window.zorgSocket) window.zorgSocket.emit('register-name', nameInput);
                     
                     document.getElementById('loginOverlay').classList.add('opacity-0');
                     setTimeout(() => {
                         document.getElementById('loginOverlay').classList.add('hidden');
                         updateProfileUI();
-                        showToast(\`Welcome back, Agent \${zUsername}.\`, "success");
+                        showToast(\`Welcome to the network, Agent \${zUsername}.\`, "success");
                     }, 500);
                 }
 
                 function updateProfileUI() {
                     document.getElementById('userProfile').classList.remove('hidden');
-                    document.getElementById('profileName').innerText = \`Hi, \${zUsername}\`;
+                    document.getElementById('profileName').innerHTML = \`Hi, \${zUsername}! <span class="text-[0.6rem] ml-1">🟢</span>\`;
                     document.getElementById('scrapeCount').innerText = zScrapeCount;
                 }
 
@@ -1311,10 +1306,96 @@ app.get('/', (req, res) => {
                 }
                 
                 toggle();
+
+                // --- SOCKET.IO CLIENT LOGIC ---
+                window.zorgSocket = io();
+                
+                window.zorgSocket.on('connect', () => {
+                    console.log('Connected to ZORG-Ω Network.');
+                });
+
+                window.zorgSocket.on('request-name', () => {
+                    document.getElementById('loginOverlay').classList.remove('hidden');
+                    setTimeout(() => {
+                        document.getElementById('loginOverlay').classList.remove('opacity-0');
+                        document.getElementById('loginName').focus();
+                    }, 50);
+                });
+
+                window.zorgSocket.on('online-users', (users) => {
+                    const me = users.find(u => u.id === window.zorgSocket.id);
+                    if (me && me.name) {
+                        zUsername = me.name;
+                        updateProfileUI();
+                    }
+                    
+                    const listEl = document.getElementById('onlineList');
+                    if (listEl) {
+                        listEl.innerHTML = Object.values(users).map(u => {
+                            const isMe = u.id === window.zorgSocket.id;
+                            const initial = (u.name || "?").charAt(0).toUpperCase();
+                            return \`
+                                <div class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner \${isMe ? 'border-blue-500/30 bg-blue-900/10' : ''}">
+                                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center border border-blue-500/30 shrink-0 shadow-lg shadow-black/20">
+                                        <span class="text-xs font-black text-blue-400">\${initial}</span>
+                                    </div>
+                                    <div class="flex-1 overflow-hidden">
+                                        <div class="text-[11px] font-bold truncate \${isMe ? 'text-blue-400' : 'text-slate-200'}">\${u.name} \${isMe ? '<span class="text-[9px] text-slate-500 font-mono ml-1">(You)</span>' : ''}</div>
+                                        <div class="text-[9px] font-mono text-slate-500 truncate">\${u.ip}</div>
+                                    </div>
+                                    <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)] shrink-0 animate-pulse"></div>
+                                </div>
+                            \`;
+                        }).join('');
+                    }
+                });
             </script>
         </body>
         </html>
     `);
 });
 
-app.listen(PORT, '0.0.0.0', () => console.log(`🚀 ZORG-Ω Architect Online: http://localhost:${PORT}`));
+// --- SOCKET.IO REAL-TIME ONLINE SYSTEM ---
+const usersFile = path.join(__dirname, 'users.json');
+let savedUsers = {};
+try {
+    if (fs.existsSync(usersFile)) {
+        savedUsers = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+    }
+} catch (e) {
+    console.error("Error loading users.json", e);
+}
+
+const activeUsers = {};
+
+io.on('connection', (socket) => {
+    let ip = socket.handshake.address || '';
+    if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+
+    // If IP known, register them immediately
+    if (savedUsers[ip]) {
+        activeUsers[socket.id] = { id: socket.id, name: savedUsers[ip], ip: ip };
+        io.emit('online-users', Object.values(activeUsers));
+    } else {
+        socket.emit('request-name');
+    }
+
+    socket.on('register-name', (name) => {
+        if (!name || !name.trim()) return;
+        const cleanName = name.trim();
+        savedUsers[ip] = cleanName;
+        fs.writeFileSync(usersFile, JSON.stringify(savedUsers, null, 2));
+
+        activeUsers[socket.id] = { id: socket.id, name: cleanName, ip: ip };
+        io.emit('online-users', Object.values(activeUsers));
+    });
+
+    socket.on('disconnect', () => {
+        if (activeUsers[socket.id]) {
+            delete activeUsers[socket.id];
+            io.emit('online-users', Object.values(activeUsers));
+        }
+    });
+});
+
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 ZORG-Ω Architect Online: http://localhost:${PORT}`));
