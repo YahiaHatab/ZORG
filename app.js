@@ -328,6 +328,12 @@ app.post('/upload-engine', (req, res) => {
             }
         }
 
+        // Notify UI of Core Count Change
+        let currDel = [];
+        try { if(fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) currDel = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')); } catch(e){}
+        const newCount = 6 + customEngines.length - currDel.length;
+        io.emit('update-engine-count', newCount);
+
         emitLog(`Engine '${name}' (${safeId}) has been successfully ${msgType}.`);
         res.json({ success: true, message: `Engine ${name} ${msgType.toLowerCase()} successfully.` });
     } catch (err) {
@@ -413,6 +419,12 @@ app.delete('/delete-engine/:id', (req, res) => {
         if (fs.existsSync(scriptPath)) {
             fs.unlinkSync(scriptPath);
         }
+
+        // Notify UI of Core Count Change
+        let currDel = [];
+        try { if(fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) currDel = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')); } catch(e){}
+        const newCount = 6 + customEngines.length - currDel.length;
+        io.emit('update-engine-count', newCount);
 
         emitLog(`Engine '${engineName}' (${id}) has been DELETED.`);
         res.json({ success: true, message: `Engine ${engineName} deleted successfully.` });
@@ -714,6 +726,7 @@ app.get('/', (req, res) => {
                     <div>
                         <h1 class="text-4xl font-black text-blue-500 tracking-tighter italic">ZORG-Ω</h1>
                         <p class="text-[10px] text-slate-500 font-mono uppercase">Architect v6.0 Modular | Standardizer Active</p>
+                        <p class="text-[9px] text-blue-500/50 font-mono tracking-widest mt-1">SYSTEM_CORES: [<span id="engineCountBadge">0</span>]</p>
                     </div>
                     <div id="counterArea" class="text-right hidden">
                         <div id="loader" class="flex items-center space-x-1 mb-1">
@@ -1507,6 +1520,16 @@ app.get('/', (req, res) => {
                         activeEnginesMap = data.activeEngines;
                         if (typeof syncEngineUI === 'function') syncEngineUI();
                     }
+                    
+                    if (data.engineCount !== undefined) {
+                        const badge = document.getElementById('engineCountBadge');
+                        if (badge) badge.innerText = data.engineCount;
+                    }
+                });
+                
+                window.zorgSocket.on('update-engine-count', (count) => {
+                    const badge = document.getElementById('engineCountBadge');
+                    if (badge) badge.innerText = count;
                 });
 
                 window.zorgSocket.on('new-system-update', (log) => {
@@ -1706,7 +1729,15 @@ io.on('connection', (socket) => {
         }
     }
 
-    socket.emit('init-data', { isAdmin, logs: systemLogs.slice(0, 10), activeEngines });
+    let deletedEnginesCount = 0;
+    try {
+        if (fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) {
+            deletedEnginesCount = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')).length;
+        }
+    } catch(e) {}
+    const engineCount = 6 + customEngines.length - deletedEnginesCount;
+
+    socket.emit('init-data', { isAdmin, logs: systemLogs.slice(0, 10), activeEngines, engineCount });
 
     if (uName) {
         activeUsers[socket.id] = { id: socket.id, name: uName, ip: ip };
@@ -1723,7 +1754,16 @@ io.on('connection', (socket) => {
 
         activeUsers[socket.id] = { id: socket.id, name: cleanName, ip: ip };
         io.emit('online-users', Object.values(activeUsers));
-        socket.emit('init-data', { isAdmin: false, logs: systemLogs.slice(0, 10), activeEngines });
+        
+        let deletedEnginesCount = 0;
+        try {
+            if (fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) {
+                deletedEnginesCount = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')).length;
+            }
+        } catch(e) {}
+        const engineCount = 6 + customEngines.length - deletedEnginesCount;
+        
+        socket.emit('init-data', { isAdmin: false, logs: systemLogs.slice(0, 10), activeEngines, engineCount });
     });
 
     socket.on('disconnect', () => {
