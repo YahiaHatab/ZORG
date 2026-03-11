@@ -534,6 +534,11 @@ app.get('/', (req, res) => {
 
                 <!-- ADMIN BROADCAST WIDGET -->
                 <div id="adminUpdatePanel" class="hidden flex items-center bg-slate-900/70 p-2 rounded-2xl border border-purple-900/50 shadow-xl backdrop-blur-md transition-all">
+                    <!-- Clear Logs Button -->
+                    <button onclick="clearSystemLogs()" class="w-10 h-10 shrink-0 rounded-xl bg-red-600/20 hover:bg-red-600/40 text-red-500 mr-2 flex items-center justify-center transition-colors border border-red-500/30" title="Clear All System Updates">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                    <!-- Expand Action for Input -->
                     <button onclick="toggleAdminPanel()" class="w-10 h-10 shrink-0 rounded-xl bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 flex items-center justify-center transition-colors border border-purple-500/30" title="Broadcast System Update">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
                     </button>
@@ -1383,7 +1388,9 @@ app.get('/', (req, res) => {
                     }
                 });
 
-                function createUpdateHtml(u) {
+                let isUserAdmin = false;
+
+                function createUpdateHtml(u, idx) {
                     const date = new Date(u.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                     let color = "text-purple-400";
                     let bg = "bg-purple-900/10";
@@ -1391,11 +1398,17 @@ app.get('/', (req, res) => {
                     if(u.category === 'Alert') { color = "text-red-400"; bg = "bg-red-900/10"; border="border-red-500/20";}
                     if(u.category === 'Fix') { color = "text-emerald-400"; bg = "bg-emerald-900/10"; border="border-emerald-500/20";}
                     
+                    const deleteBtn = isUserAdmin ? \`
+                        <button onclick="deleteSystemLog(\${u.id})" class="absolute top-1.5 right-1.5 text-slate-500 hover:text-red-400 transition-colors p-1" title="Delete Log">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>\` : '';
+                    
                     return \`
-                        <div class="p-3 rounded-xl border \${border} \${bg} shadow-inner fade-in-up">
+                        <div class="p-3 rounded-xl border \${border} \${bg} shadow-inner fade-in-up relative pr-7" id="log-\${u.id}">
+                            \${deleteBtn}
                             <div class="flex justify-between items-center mb-1">
                                 <span class="text-[9px] font-black uppercase tracking-widest \${color}">\${u.category}</span>
-                                <span class="text-[8px] font-mono text-slate-500">\${date}</span>
+                                <span class="text-[8px] font-mono text-slate-500 mr-2">\${date}</span>
                             </div>
                             <p class="text-[11px] text-slate-300 font-medium leading-tight">\${u.text}</p>
                             <div class="text-[8px] text-slate-500 font-bold uppercase tracking-widest mt-1.5 text-right">- \${u.author}</div>
@@ -1404,21 +1417,33 @@ app.get('/', (req, res) => {
                 }
 
                 window.zorgSocket.on('init-data', (data) => {
+                    isUserAdmin = data.isAdmin;
                     if (data.isAdmin) {
                         document.getElementById('adminUpdatePanel').classList.remove('hidden');
                     }
                     if (data.logs && data.logs.length > 0) {
                         const listEl = document.getElementById('updatesList');
-                        listEl.innerHTML = data.logs.map(createUpdateHtml).join('');
+                        listEl.innerHTML = data.logs.map((log, idx) => createUpdateHtml(log, idx)).join('');
+                    } else if (data.logs && data.logs.length === 0) {
+                       document.getElementById('updatesList').innerHTML = '';
                     }
                 });
 
                 window.zorgSocket.on('new-system-update', (log) => {
                     const listEl = document.getElementById('updatesList');
                     const wrapper = document.createElement('div');
-                    wrapper.innerHTML = createUpdateHtml(log);
+                    wrapper.innerHTML = createUpdateHtml(log, log.id);
                     listEl.prepend(wrapper.firstElementChild);
                     showToast(\`[\${log.category.toUpperCase()}] System Update Broadcasted\`, log.category === 'Alert' ? 'error' : 'success');
+                });
+                
+                window.zorgSocket.on('clear-logs', () => {
+                   document.getElementById('updatesList').innerHTML = ''; 
+                });
+                
+                window.zorgSocket.on('delete-log', (id) => {
+                   const logEl = document.getElementById('log-' + id);
+                   if (logEl) logEl.remove();
                 });
 
                 function toggleAdminPanel() {
@@ -1452,6 +1477,29 @@ app.get('/', (req, res) => {
                         showToast(e.message, "error");
                     }
                 }
+                
+                async function clearSystemLogs() {
+                    if (!confirm("Are you sure you want to clear ALL system updates?")) return;
+                    try {
+                        const res = await fetch('/admin/clear-logs', { method: 'POST' });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error);
+                        showToast("All system logs wiped.", "success");
+                    } catch (e) {
+                        showToast(e.message, "error");
+                    }
+                }
+                
+                async function deleteSystemLog(logId) {
+                    if (!confirm("Delete this system log?")) return;
+                    try {
+                        const res = await fetch(\`/admin/delete-log/\${logId}\`, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error);
+                    } catch (e) {
+                        showToast(e.message, "error");
+                    }
+                }
             </script>
         </body>
         </html>
@@ -1464,6 +1512,16 @@ let systemLogs = [];
 try {
     if (fs.existsSync(logsFile)) {
         systemLogs = JSON.parse(fs.readFileSync(logsFile, 'utf8'));
+        // Assign IDs to old logs that lack them
+        let modified = false;
+        systemLogs = systemLogs.map((log, index) => {
+            if (!log.id) {
+                log.id = Date.now() + index;
+                modified = true;
+            }
+            return log;
+        });
+        if (modified) fs.writeFileSync(logsFile, JSON.stringify(systemLogs, null, 2));
     } else {
         fs.writeFileSync(logsFile, JSON.stringify([]));
     }
@@ -1490,7 +1548,7 @@ app.post('/admin/add-log', (req, res) => {
     const { text, category } = req.body;
     if (!text || !category) return res.status(400).json({ error: "Missing text or category." });
 
-    const newUpdate = { text, category, date: new Date().toISOString(), author: authorName };
+    const newUpdate = { id: Date.now(), text, category, date: new Date().toISOString(), author: authorName };
 
     systemLogs.unshift(newUpdate);
     if (systemLogs.length > 50) systemLogs = systemLogs.slice(0, 50);
@@ -1498,6 +1556,38 @@ app.post('/admin/add-log', (req, res) => {
 
     io.emit('new-system-update', newUpdate);
     res.json({ success: true, message: "System update broadcasted." });
+});
+
+app.post('/admin/clear-logs', (req, res) => {
+    let ip = req.socket.remoteAddress || req.ip;
+    if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+    
+    let userEntry = savedUsers[ip];
+    if (!userEntry || userEntry.role !== 'admin') {
+        return res.status(403).json({ error: "Unauthorized." });
+    }
+    
+    systemLogs = [];
+    fs.writeFileSync(logsFile, JSON.stringify([]));
+    io.emit('clear-logs');
+    res.json({ success: true });
+});
+
+app.delete('/admin/delete-log/:id', (req, res) => {
+    let ip = req.socket.remoteAddress || req.ip;
+    if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+    
+    let userEntry = savedUsers[ip];
+    if (!userEntry || userEntry.role !== 'admin') {
+        return res.status(403).json({ error: "Unauthorized." });
+    }
+    
+    const id = parseInt(req.params.id);
+    systemLogs = systemLogs.filter(log => log.id !== id);
+    fs.writeFileSync(logsFile, JSON.stringify(systemLogs, null, 2));
+    
+    io.emit('delete-log', id);
+    res.json({ success: true });
 });
 
 // --- SOCKET.IO REAL-TIME ONLINE SYSTEM ---
