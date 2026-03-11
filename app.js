@@ -540,6 +540,8 @@ app.get('/', (req, res) => {
                 .fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
                 .dot { display: inline-block; width: 10px; height: 10px; background-color: #10b981; border-radius: 100%; animation: bounce 1.4s infinite ease-in-out both; }
                 .dot1 { animation-delay: -0.32s; } .dot2 { animation-delay: -0.16s; }
+                @keyframes pulseHighlight { 0% { border-color: rgba(51,65,85,1); box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05); } 30% { border-color: rgba(168,85,247,1); box-shadow: 0 0 20px rgba(168,85,247,0.6); } 100% { border-color: rgba(51,65,85,1); box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05); } }
+                .highlight-pulse { animation: pulseHighlight 2.5s ease-out; }
                 #telemetry::-webkit-scrollbar { width: 6px; }
                 #telemetry::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
                 /* Custom scrollbar for dropdown */
@@ -621,7 +623,7 @@ app.get('/', (req, res) => {
                 </div>
 
                 <!-- WHISPER BOX UI -->
-                <div id="whisperBox" class="hidden shrink-0 flex-col border-t border-slate-700/50 pt-4 mt-2">
+                <div id="whisperBox" class="hidden shrink-0 flex-col bg-slate-950/50 border-t border-slate-700/50 p-3 mt-2 rounded-xl">
                     <div class="flex items-center justify-between mb-2">
                         <span id="whisperTargetUi" class="text-[10px] font-black uppercase text-purple-400 tracking-widest">Message to User</span>
                         <button onclick="closeWhisper()" class="text-slate-500 hover:text-red-400 transition-colors" title="Close">
@@ -629,7 +631,7 @@ app.get('/', (req, res) => {
                         </button>
                     </div>
                     <div class="flex gap-2">
-                        <input id="whisperInput" type="text" placeholder="Whisper..." class="w-full p-2 bg-slate-950 border border-slate-700 rounded-lg text-xs outline-none focus:border-purple-500/50 text-slate-200 transition-colors shadow-inner" onkeydown="if(event.key === 'Enter') sendWhisper()">
+                        <input id="whisperInput" type="text" placeholder="Whisper..." class="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-xs outline-none focus:border-purple-500/50 text-slate-200 transition-colors shadow-inner" onkeydown="if(event.key === 'Enter') sendWhisper()">
                         <button onclick="sendWhisper()" class="bg-purple-600 hover:bg-purple-500 text-white rounded-lg p-2 font-bold transition-colors shadow-lg shadow-purple-900/40">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path fill-rule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
                         </button>
@@ -901,13 +903,13 @@ app.get('/', (req, res) => {
                             titleStr = 'ERROR';
                             iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>';
                         } else if (type === 'whisper') {
-                            bgClass = 'bg-purple-900/95 border-purple-500/50 shadow-purple-900/50';
+                            bgClass = 'bg-purple-900/95 border-purple-500/50 shadow-purple-900/50 hover:bg-purple-800/95 cursor-pointer';
                             iconClass = 'text-purple-400';
                             titleStr = 'TRANSMISSION';
                             iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z" clip-rule="evenodd" /></svg>';
                         }
 
-                        toast.className = 'transform transition-all duration-300 translate-x-12 opacity-0 flex items-start gap-4 p-4 rounded-xl border shadow-2xl backdrop-blur-xl w-80 ' + bgClass;
+                        toast.className = 'transform transition-all duration-300 translate-x-12 opacity-0 flex items-start gap-4 p-4 rounded-xl border shadow-2xl backdrop-blur-xl w-80 pointer-events-auto ' + bgClass;
                         toast.innerHTML = 
                             '<div class="shrink-0 ' + iconClass + ' mt-0.5">' + iconSvg + '</div>' +
                             '<div class="flex-1">' +
@@ -1487,13 +1489,13 @@ app.get('/', (req, res) => {
                         let clickHandler = '';
                         if (!isMe) {
                             const safeName = (u.name || "?").replace(/'/g, "\\'");
-                            clickHandler = 'onclick="openWhisper(\\\'' + u.id + '\\\', \\\'' + safeName + '\\\')" class="cursor-pointer flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner"';
+                            clickHandler = 'onclick="setChatTarget(\\\'' + u.id + '\\\', \\\'' + safeName + '\\\')" class="cursor-pointer flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner"';
                         } else {
                             clickHandler = 'class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner border-blue-500/30 bg-blue-900/10"';
                         }
 
                         return \`
-                            <div \${clickHandler}>
+                            <div id="user-card-\${u.id}" \${clickHandler}>
                                 <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center border border-blue-500/30 shrink-0 shadow-lg shadow-black/20">
                                     <span class="text-xs font-black text-blue-400">\${initial}</span>
                                 </div>
@@ -1509,12 +1511,12 @@ app.get('/', (req, res) => {
                 
                 let activeWhisperTargetId = null;
 
-                function openWhisper(id, name) {
+                window.setChatTarget = function(id, name) {
                     activeWhisperTargetId = id;
-                    document.getElementById('whisperTargetUi').innerText = 'Message Context: ' + name;
+                    document.getElementById('whisperTargetUi').innerText = 'Messaging: ' + name;
                     document.getElementById('whisperBox').classList.replace('hidden', 'flex');
                     document.getElementById('whisperInput').focus();
-                }
+                };
 
                 function closeWhisper() {
                     activeWhisperTargetId = null;
@@ -1554,7 +1556,16 @@ app.get('/', (req, res) => {
                         }
                     } catch(e) {}
                     
-                    showToast(\`<span class="text-slate-400 text-[10px] block">From \${data.from}:</span> \${data.message}\`, 'whisper');
+                    const safeName = data.from.replace(/'/g, "\\'");
+                    const msgHtml = \`<div onclick="setChatTarget('\${data.fromId}', '\${safeName}')" class="w-full h-full"><span class="text-slate-400 text-[10px] block mb-1">From \${data.from}: <i class="text-slate-500 lowercase">(Click to reply)</i></span> \${data.message}</div>\`;
+                    showToast(msgHtml, 'whisper');
+
+                    const userCard = document.getElementById('user-card-' + data.fromId);
+                    if (userCard) {
+                        userCard.classList.remove('highlight-pulse');
+                        void userCard.offsetWidth; // Trigger reflow
+                        userCard.classList.add('highlight-pulse');
+                    }
                 });
 
                 function syncEngineUI() {
