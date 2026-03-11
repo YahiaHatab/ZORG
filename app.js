@@ -81,6 +81,35 @@ app.post('/run', async (req, res) => {
     const { mode, domain, fileName, curlCommand, token, cadEventId, cadClientId, cadEventKey, dynamicShowId, cookie, customInput, testMode } = req.body;
     let rawRecords = [];
 
+    // --- LOCK REGISTRATION ---
+    let ip = req.socket.remoteAddress || req.ip;
+    if (ip && ip.startsWith('::ffff:')) ip = ip.substring(7);
+    let currentUser = Object.values(activeUsers).find(u => u.ip === ip);
+    let username = currentUser ? currentUser.name : (savedUsers[ip] ? savedUsers[ip].name : "Unknown");
+    let socketId = currentUser ? currentUser.id : "unknown-socket";
+
+    if (activeEngines[mode] && activeEngines[mode].socketId !== socketId) {
+        return res.status(409).json({ error: `Engine is currently in use by ${activeEngines[mode].startedBy}.` });
+    }
+
+    const defaultScriptMap = {
+        'marketplace': 'Map-Dynamics (Marketplace)',
+        'dusseldorf': 'Messe Düsseldorf',
+        'algolia': 'NürnbergMesse (Algolia)',
+        'informa': 'Informa Markets (cURL)',
+        'eshow': 'eShow (Concurrent)',
+        'cadmium': 'Cadmium (Harvester)'
+    };
+    let engName = defaultScriptMap[mode];
+    if (!engName) {
+        const ce = customEngines.find(e => e.id === mode);
+        if (ce) engName = ce.name;
+        else engName = mode;
+    }
+
+    activeEngines[mode] = { startedBy: username, socketId: socketId, engineName: engName, startTime: Date.now(), mode: mode };
+    io.emit('engine-registry-update', activeEngines);
+
     let runState = { aborted: false };
 
     // Listen for explicit abort requests from the client (fetch aborted)
@@ -166,6 +195,10 @@ app.post('/run', async (req, res) => {
             }
         } finally {
             if (testMode) Array.prototype.push = originalPush;
+            if (activeEngines[mode] && activeEngines[mode].socketId === socketId) {
+                delete activeEngines[mode];
+                io.emit('engine-registry-update', activeEngines);
+            }
         }
 
         if (!rawRecords || !rawRecords.length) {
@@ -1030,6 +1063,7 @@ app.get('/', (req, res) => {
                     if(m === 'informa') document.getElementById('curl').placeholder = "Paste Informa API cURL here...";
 
                     ${customToggleStr}
+                    if (typeof syncEngineUI === 'function') syncEngineUI();
                 }
 
                 // --- MODAL / EDIT FUNCTIONS ---
@@ -1360,32 +1394,73 @@ app.get('/', (req, res) => {
                     }, 50);
                 });
 
+                let currentOnlineUsers = [];
+                let activeEnginesMap = {};
+
+                function renderOnlineUsers() {
+                    const listEl = document.getElementById('onlineList');
+                    if (!listEl) return;
+                    listEl.innerHTML = Object.values(currentOnlineUsers).map(u => {
+                        const isMe = u.id === window.zorgSocket.id;
+                        const initial = (u.name || "?").charAt(0).toUpperCase();
+
+                        let engStatusText = '🟢 Online';
+                        let engStatusColor = 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)] animate-pulse';
+                        
+                        const engEntry = Object.values(activeEnginesMap).find(e => e.socketId === u.id);
+                        if (engEntry) {
+                            engStatusText = \`🛠️ Using \${engEntry.engineName || engEntry.mode}\`;
+                            engStatusColor = 'bg-orange-500 shadow-[0_0_5px_rgba(249,115,22,0.8)] animate-pulse';
+                        }
+
+                        return \`
+                            <div class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner \${isMe ? 'border-blue-500/30 bg-blue-900/10' : ''}">
+                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center border border-blue-500/30 shrink-0 shadow-lg shadow-black/20">
+                                    <span class="text-xs font-black text-blue-400">\${initial}</span>
+                                </div>
+                                <div class="flex-1 overflow-hidden">
+                                    <div class="text-[11px] font-bold truncate \${isMe ? 'text-blue-400' : 'text-slate-200'}">\${u.name} \${isMe ? '<span class="text-[9px] text-slate-500 font-mono ml-1">(You)</span>' : ''}</div>
+                                    <div class="text-[9px] font-mono text-slate-400 font-bold truncate">\${engStatusText}</div>
+                                </div>
+                                <div class="w-2 h-2 rounded-full \${engStatusColor} shrink-0"></div>
+                            </div>
+                        \`;
+                    }).join('');
+                }
+
+                function syncEngineUI() {
+                    const loader = document.getElementById('loader');
+                    if (loader && !loader.classList.contains('hidden')) return; // Do not modify if currently executing
+
+                    const m = document.getElementById('mode').value;
+                    const btn = document.getElementById('btn');
+                    if (activeEnginesMap[m] && activeEnginesMap[m].socketId !== window.zorgSocket.id) {
+                        btn.disabled = true;
+                        btn.innerText = \`ENGINE IN USE BY \${activeEnginesMap[m].startedBy.toUpperCase()}\`;
+                        btn.classList.add('opacity-50', 'cursor-not-allowed');
+                        btn.classList.remove('hover:bg-blue-500', 'active:scale-95');
+                    } else {
+                        btn.disabled = false;
+                        btn.innerText = 'EXECUTE ARCHITECT';
+                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        btn.classList.add('hover:bg-blue-500', 'active:scale-95');
+                    }
+                }
+
+                window.zorgSocket.on('engine-registry-update', (engines) => {
+                    activeEnginesMap = engines;
+                    renderOnlineUsers();
+                    syncEngineUI();
+                });
+
                 window.zorgSocket.on('online-users', (users) => {
+                    currentOnlineUsers = users;
                     const me = users.find(u => u.id === window.zorgSocket.id);
                     if (me && me.name) {
                         zUsername = me.name;
                         updateProfileUI();
                     }
-                    
-                    const listEl = document.getElementById('onlineList');
-                    if (listEl) {
-                        listEl.innerHTML = Object.values(users).map(u => {
-                            const isMe = u.id === window.zorgSocket.id;
-                            const initial = (u.name || "?").charAt(0).toUpperCase();
-                            return \`
-                                <div class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner \${isMe ? 'border-blue-500/30 bg-blue-900/10' : ''}">
-                                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center border border-blue-500/30 shrink-0 shadow-lg shadow-black/20">
-                                        <span class="text-xs font-black text-blue-400">\${initial}</span>
-                                    </div>
-                                    <div class="flex-1 overflow-hidden">
-                                        <div class="text-[11px] font-bold truncate \${isMe ? 'text-blue-400' : 'text-slate-200'}">\${u.name} \${isMe ? '<span class="text-[9px] text-slate-500 font-mono ml-1">(You)</span>' : ''}</div>
-                                        <div class="text-[9px] font-mono text-slate-500 truncate">\${u.ip}</div>
-                                    </div>
-                                    <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)] shrink-0 animate-pulse"></div>
-                                </div>
-                            \`;
-                        }).join('');
-                    }
+                    renderOnlineUsers();
                 });
 
                 let isUserAdmin = false;
@@ -1426,6 +1501,11 @@ app.get('/', (req, res) => {
                         listEl.innerHTML = data.logs.map((log, idx) => createUpdateHtml(log, idx)).join('');
                     } else if (data.logs && data.logs.length === 0) {
                        document.getElementById('updatesList').innerHTML = '';
+                    }
+                    
+                    if (data.activeEngines) {
+                        activeEnginesMap = data.activeEngines;
+                        if (typeof syncEngineUI === 'function') syncEngineUI();
                     }
                 });
 
@@ -1606,6 +1686,7 @@ try {
 }
 
 const activeUsers = {};
+const activeEngines = {};
 
 io.on('connection', (socket) => {
     let ip = socket.handshake.address || '';
@@ -1625,7 +1706,7 @@ io.on('connection', (socket) => {
         }
     }
 
-    socket.emit('init-data', { isAdmin, logs: systemLogs.slice(0, 10) });
+    socket.emit('init-data', { isAdmin, logs: systemLogs.slice(0, 10), activeEngines });
 
     if (uName) {
         activeUsers[socket.id] = { id: socket.id, name: uName, ip: ip };
@@ -1642,7 +1723,7 @@ io.on('connection', (socket) => {
 
         activeUsers[socket.id] = { id: socket.id, name: cleanName, ip: ip };
         io.emit('online-users', Object.values(activeUsers));
-        socket.emit('init-data', { isAdmin: false, logs: systemLogs.slice(0, 10) });
+        socket.emit('init-data', { isAdmin: false, logs: systemLogs.slice(0, 10), activeEngines });
     });
 
     socket.on('disconnect', () => {
