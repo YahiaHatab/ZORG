@@ -1479,7 +1479,9 @@ app.get('/', (req, res) => {
                 }
                 
                 async function clearSystemLogs() {
-                    if (!confirm("Are you sure you want to clear ALL system updates?")) return;
+                    const isConfirmed = await customConfirm("Are you sure you want to clear ALL system updates? This action cannot be undone.", "Clear All Logs");
+                    if (!isConfirmed) return;
+                    
                     try {
                         const res = await fetch('/admin/clear-logs', { method: 'POST' });
                         const data = await res.json();
@@ -1491,7 +1493,9 @@ app.get('/', (req, res) => {
                 }
                 
                 async function deleteSystemLog(logId) {
-                    if (!confirm("Delete this system log?")) return;
+                    const isConfirmed = await customConfirm("Are you sure you want to delete this specific system update log?", "Delete System Log");
+                    if (!isConfirmed) return;
+                    
                     try {
                         const res = await fetch(\`/admin/delete-log/\${logId}\`, { method: 'DELETE' });
                         const data = await res.json();
