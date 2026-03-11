@@ -619,6 +619,22 @@ app.get('/', (req, res) => {
                         <!-- Logs injected here -->
                     </div>
                 </div>
+
+                <!-- WHISPER BOX UI -->
+                <div id="whisperBox" class="hidden shrink-0 flex-col border-t border-slate-700/50 pt-4 mt-2">
+                    <div class="flex items-center justify-between mb-2">
+                        <span id="whisperTargetUi" class="text-[10px] font-black uppercase text-purple-400 tracking-widest">Message to User</span>
+                        <button onclick="closeWhisper()" class="text-slate-500 hover:text-red-400 transition-colors" title="Close">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                    <div class="flex gap-2">
+                        <input id="whisperInput" type="text" placeholder="Whisper..." class="w-full p-2 bg-slate-950 border border-slate-700 rounded-lg text-xs outline-none focus:border-purple-500/50 text-slate-200 transition-colors shadow-inner" onkeydown="if(event.key === 'Enter') sendWhisper()">
+                        <button onclick="sendWhisper()" class="bg-purple-600 hover:bg-purple-500 text-white rounded-lg p-2 font-bold transition-colors shadow-lg shadow-purple-900/40">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path fill-rule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <!-- LOGIN OVERLAY -->
@@ -869,18 +885,33 @@ app.get('/', (req, res) => {
                         const container = document.getElementById('toastContainer');
                         const toast = document.createElement('div');
                         
-                        const bgClass = type === 'success' ? 'bg-emerald-900/95 border-emerald-500/50 shadow-emerald-900/50' : 'bg-red-900/95 border-red-500/50 shadow-red-900/50';
-                        const iconClass = type === 'success' ? 'text-emerald-400' : 'text-red-400';
-                        const title = type === 'success' ? 'SUCCESS' : 'ERROR';
-                        const iconSvg = type === 'success' 
-                            ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>'
-                            : '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>';
+                        let bgClass = '';
+                        let iconClass = '';
+                        let titleStr = '';
+                        let iconSvg = '';
+
+                        if (type === 'success') {
+                            bgClass = 'bg-emerald-900/95 border-emerald-500/50 shadow-emerald-900/50';
+                            iconClass = 'text-emerald-400';
+                            titleStr = 'SUCCESS';
+                            iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>';
+                        } else if (type === 'error') {
+                            bgClass = 'bg-red-900/95 border-red-500/50 shadow-red-900/50';
+                            iconClass = 'text-red-400';
+                            titleStr = 'ERROR';
+                            iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>';
+                        } else if (type === 'whisper') {
+                            bgClass = 'bg-purple-900/95 border-purple-500/50 shadow-purple-900/50';
+                            iconClass = 'text-purple-400';
+                            titleStr = 'TRANSMISSION';
+                            iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z" clip-rule="evenodd" /></svg>';
+                        }
 
                         toast.className = 'transform transition-all duration-300 translate-x-12 opacity-0 flex items-start gap-4 p-4 rounded-xl border shadow-2xl backdrop-blur-xl w-80 ' + bgClass;
                         toast.innerHTML = 
                             '<div class="shrink-0 ' + iconClass + ' mt-0.5">' + iconSvg + '</div>' +
                             '<div class="flex-1">' +
-                                '<h4 class="' + iconClass + ' font-black text-xs uppercase tracking-widest mb-1 italic">' + title + '</h4>' +
+                                '<h4 class="' + iconClass + ' font-black text-xs uppercase tracking-widest mb-1 italic">' + titleStr + '</h4>' +
                                 '<p class="text-slate-200 text-sm font-medium">' + message + '</p>' +
                             '</div>';
                         
@@ -1453,12 +1484,20 @@ app.get('/', (req, res) => {
                             dotHtml = '<button onclick="toggleStatusManual()" class="w-4 h-4 flex items-center justify-center rounded-full hover:scale-125 transition-transform shrink-0" title="Click to manually toggle Away/Online"><div class="w-2 h-2 rounded-full ' + engStatusColor + ' pointer-events-none"></div></button>';
                         }
 
+                        let clickHandler = '';
+                        if (!isMe) {
+                            const safeName = (u.name || "?").replace(/'/g, "\\'");
+                            clickHandler = 'onclick="openWhisper(\\\'' + u.id + '\\\', \\\'' + safeName + '\\\')" class="cursor-pointer flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner"';
+                        } else {
+                            clickHandler = 'class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner border-blue-500/30 bg-blue-900/10"';
+                        }
+
                         return \`
-                            <div class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner \${isMe ? 'border-blue-500/30 bg-blue-900/10' : ''}">
+                            <div \${clickHandler}>
                                 <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center border border-blue-500/30 shrink-0 shadow-lg shadow-black/20">
                                     <span class="text-xs font-black text-blue-400">\${initial}</span>
                                 </div>
-                                <div class="flex-1 overflow-hidden">
+                                <div class="flex-1 overflow-hidden pointer-events-none">
                                     <div class="text-[11px] font-bold truncate \${isMe ? 'text-blue-400' : 'text-slate-200'}">\${u.name} \${isMe ? '<span class="text-[9px] text-slate-500 font-mono ml-1">(You)</span>' : ''}</div>
                                     <div class="text-[9px] font-mono text-slate-400 font-bold truncate">\${engStatusText}</div>
                                 </div>
@@ -1467,6 +1506,56 @@ app.get('/', (req, res) => {
                         \`;
                     }).join('');
                 }
+                
+                let activeWhisperTargetId = null;
+
+                function openWhisper(id, name) {
+                    activeWhisperTargetId = id;
+                    document.getElementById('whisperTargetUi').innerText = 'Message Context: ' + name;
+                    document.getElementById('whisperBox').classList.replace('hidden', 'flex');
+                    document.getElementById('whisperInput').focus();
+                }
+
+                function closeWhisper() {
+                    activeWhisperTargetId = null;
+                    document.getElementById('whisperBox').classList.replace('flex', 'hidden');
+                    document.getElementById('whisperInput').value = '';
+                }
+
+                function sendWhisper() {
+                    if (!activeWhisperTargetId) return;
+                    const input = document.getElementById('whisperInput');
+                    const msg = input.value.trim();
+                    if (!msg) return;
+                    
+                    window.zorgSocket.emit('send-private-msg', { targetId: activeWhisperTargetId, message: msg });
+                    
+                    showToast(\`<span class="text-slate-400 text-[10px] block">To \${document.getElementById('whisperTargetUi').innerText.replace('Message Context: ', '')}:</span> \${msg}\`, 'success');
+                    input.value = '';
+                }
+
+                window.zorgSocket.on('receive-private-msg', (data) => {
+                    // Play subtle ZORG beep using AudioContext (safe, no external file needed)
+                    try {
+                        const AudioContextConfig = window.AudioContext || window.webkitAudioContext;
+                        if(AudioContextConfig) {
+                            const ctx = new AudioContextConfig();
+                            const osc = ctx.createOscillator();
+                            const gainNode = ctx.createGain();
+                            osc.connect(gainNode);
+                            gainNode.connect(ctx.destination);
+                            osc.type = 'sine';
+                            osc.frequency.setValueAtTime(800, ctx.currentTime);
+                            osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+                            gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+                            gainNode.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
+                            osc.start();
+                            osc.stop(ctx.currentTime + 0.5);
+                        }
+                    } catch(e) {}
+                    
+                    showToast(\`<span class="text-slate-400 text-[10px] block">From \${data.from}:</span> \${data.message}\`, 'whisper');
+                });
 
                 function syncEngineUI() {
                     const loader = document.getElementById('loader');
@@ -1804,6 +1893,17 @@ io.on('connection', (socket) => {
         if (activeUsers[socket.id]) {
             activeUsers[socket.id].status = status;
             io.emit('online-users', Object.values(activeUsers));
+        }
+    });
+
+    socket.on('send-private-msg', ({ targetId, message }) => {
+        const sender = activeUsers[socket.id];
+        if (sender && activeUsers[targetId]) {
+            io.to(targetId).emit('receive-private-msg', { 
+                from: sender.name, 
+                message: message, 
+                fromId: socket.id 
+            });
         }
     });
 });
