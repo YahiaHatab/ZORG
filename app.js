@@ -501,6 +501,22 @@ function getChatKey(name1, name2) {
 const activeUsers = {};
 const activeEngines = {};
 
+// --- BULLETIN BOARD LOGIC ---
+const bulletinFile = path.join(__dirname, 'bulletin.json');
+let bulletinPosts = [];
+try {
+    if (fs.existsSync(bulletinFile)) {
+        bulletinPosts = JSON.parse(fs.readFileSync(bulletinFile, 'utf8'));
+    } else {
+        // Pre-load with initial context
+        bulletinPosts = [
+            { id: 101, author: "System", text: "📌 Tax Quiz scheduled for March 17th.", timestamp: Date.now() },
+            { id: 102, author: "System", text: "🔗 College Drive Updates Folder: [Awaiting Link]", timestamp: Date.now() }
+        ];
+        fs.writeFileSync(bulletinFile, JSON.stringify(bulletinPosts, null, 2));
+    }
+} catch (e) { console.error("Error loading bulletin.json", e); }
+
 function generateDropdownHtml(isAdmin) {
     let deletedEngines = [];
     try {
@@ -601,6 +617,35 @@ io.on('connection', (socket) => {
         else { uName = userEntry.name; if (userEntry.role === 'admin') isAdmin = true; }
     }
 
+    // --- BULLETIN BOARD ROUTES ---
+    socket.on('add-bulletin', (text) => {
+        const sender = activeUsers[socket.id];
+        if (!sender || !text.trim()) return;
+
+        const newPin = { id: Date.now(), author: sender.name, text: text.trim(), timestamp: Date.now() };
+        bulletinPosts.unshift(newPin);
+        if (bulletinPosts.length > 30) bulletinPosts.pop(); // Keep max 30 pins
+
+        fs.writeFileSync(bulletinFile, JSON.stringify(bulletinPosts, null, 2));
+        io.emit('new-bulletin', newPin);
+    });
+
+    socket.on('delete-bulletin', (id) => {
+        // Allow the author or an admin to delete a pin
+        const sender = activeUsers[socket.id];
+        const userEntry = savedUsers[ip];
+        const isUserAdmin = userEntry && typeof userEntry === 'object' && userEntry.role === 'admin';
+
+        const postIndex = bulletinPosts.findIndex(p => p.id === id);
+        if (postIndex === -1) return;
+
+        if (isUserAdmin || bulletinPosts[postIndex].author === sender.name) {
+            bulletinPosts.splice(postIndex, 1);
+            fs.writeFileSync(bulletinFile, JSON.stringify(bulletinPosts, null, 2));
+            io.emit('remove-bulletin', id);
+        }
+    });
+
     let deletedEnginesCount = 0;
     try { if (fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) deletedEnginesCount = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')).length; } catch (e) { }
     const engineCount = 6 + customEngines.length - deletedEnginesCount;
@@ -613,7 +658,8 @@ io.on('connection', (socket) => {
         engineCount,
         customDropdownHtml: generateDropdownHtml(isAdmin),
         dynamicEngineData: generateDynamicEngineData(),
-        userName: uName || "Agent"
+        userName: uName || "Agent",
+        bulletinPosts: bulletinPosts // <-- ADD THIS LINE
     });
 
     if (uName) {
@@ -639,7 +685,8 @@ io.on('connection', (socket) => {
             engineCount,
             customDropdownHtml: generateDropdownHtml(false),
             dynamicEngineData: generateDynamicEngineData(),
-            userName: cleanName
+            userName: cleanName,
+            bulletinPosts: bulletinPosts // <-- ADD THIS LINE
         });
     });
 

@@ -11,6 +11,7 @@
 
 <body
     class="bg-slate-950 bg-[url('/Icons/Background.png')] bg-cover bg-center bg-fixed bg-no-repeat text-white min-h-screen flex items-center justify-center p-6 relative font-sans before:fixed before:inset-0 before:bg-slate-950/60 before:-z-10">
+    <!-- Top Left Corner Widgets -->
     <div class="absolute top-6 left-6 z-[60] flex items-center gap-4">
         <div id="userProfile"
             class="flex hidden items-center gap-4 bg-slate-900/60 p-3 pr-6 rounded-2xl border border-slate-700/50 shadow-xl backdrop-blur-md transition-all">
@@ -99,6 +100,47 @@
             </div>
         </div>
     </div>
+    <!-- /Top Left Corner Widgets -->
+
+    <!-- Left Sidebar: Notice Board (vertically centered) -->
+    <div class="absolute top-6 left-6 bottom-6 w-72 z-[40] hidden sm:flex flex-col pointer-events-none">
+        <div class="flex-1 flex items-center justify-center w-full pointer-events-auto">
+            <div id="bulletinSidebar"
+                class="h-[500px] w-full bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-4 shadow-xl flex flex-col transition-all">
+                <div class="flex justify-between items-center mb-4 border-b border-slate-700/50 pb-2">
+                    <h3 class="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        Notice Board
+                    </h3>
+                    <button onclick="toggleBulletinInput()"
+                        class="w-6 h-6 bg-amber-500/20 text-amber-400 rounded-md flex items-center justify-center hover:bg-amber-500/40 transition-colors border border-amber-500/30"
+                        title="Pin New Note">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div id="bulletinInputContainer" class="hidden mb-4 flex-col gap-2 transition-all">
+                    <textarea id="bulletinTextInput"
+                        class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 outline-none focus:border-amber-500/50 resize-none h-20 shadow-inner"
+                        placeholder="Paste links, dates, or notes here..."></textarea>
+                    <button onclick="submitBulletin()"
+                        class="w-full bg-amber-600 hover:bg-amber-500 text-white font-black uppercase tracking-widest text-[10px] p-2.5 rounded-xl transition-colors shadow-lg shadow-amber-900/20">Push
+                        to Board</button>
+                </div>
+
+                <div id="bulletinList" class="flex-1 overflow-y-auto dropdown-scroll space-y-3 pr-1">
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- /Left Sidebar -->
 
     <div id="onlineSidebar"
         class="absolute top-6 right-6 bottom-6 w-72 bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-4 shadow-xl z-[40] hidden sm:flex flex-col transition-all gap-4">

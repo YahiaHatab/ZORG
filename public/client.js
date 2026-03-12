@@ -1011,3 +1011,87 @@ document.addEventListener('click', function (event) {
         panel.classList.add('hidden');
     }
 });
+
+// -- BULLETIN BOARD SYSTEM --
+
+function toggleBulletinInput() {
+    const container = document.getElementById('bulletinInputContainer');
+    container.classList.toggle('hidden');
+    container.classList.toggle('flex');
+    if (!container.classList.contains('hidden')) {
+        document.getElementById('bulletinTextInput').focus();
+    }
+}
+
+function submitBulletin() {
+    const input = document.getElementById('bulletinTextInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    window.zorgSocket.emit('add-bulletin', text);
+    input.value = '';
+    toggleBulletinInput(); // Close it after sending
+}
+
+function deleteBulletin(id) {
+    window.zorgSocket.emit('delete-bulletin', id);
+}
+
+// Automatically detect URLs and make them clickable
+function linkify(text) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, function (url) {
+        return `<a href="${url}" target="_blank" class="text-blue-400 underline hover:text-blue-300 pointer-events-auto break-all">${url}</a>`;
+    });
+}
+
+function createBulletinHtml(pin) {
+    const date = new Date(pin.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const time = new Date(pin.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // Only show delete button if user is Admin OR they wrote the pin
+    const canDelete = isUserAdmin || pin.author === zUsername;
+    const deleteBtn = canDelete ? `
+        <button onclick="deleteBulletin(${pin.id})" class="absolute top-2 right-2 text-slate-500 hover:text-red-400 transition-colors pointer-events-auto" title="Delete Pin">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>` : '';
+
+    return `
+        <div class="relative p-3 rounded-xl border border-amber-500/20 bg-amber-900/10 shadow-inner fade-in-up group pr-6" id="pin-${pin.id}">
+            ${deleteBtn}
+            <div class="flex items-baseline gap-2 mb-1.5">
+                <span class="text-[9px] font-black uppercase tracking-widest text-amber-500">${pin.author}</span>
+                <span class="text-[8px] font-mono text-slate-500">${date} - ${time}</span>
+            </div>
+            <p class="text-xs text-slate-200 font-medium leading-relaxed whitespace-pre-wrap">${linkify(pin.text)}</p>
+        </div>
+    `;
+}
+
+// Hook into init-data to render initial pins
+const existingInitData = window.zorgSocket.listeners('init-data')[0];
+window.zorgSocket.off('init-data'); // Prevent duplicate listeners
+window.zorgSocket.on('init-data', (data) => {
+    existingInitData(data); // Run the rest of the init logic first
+
+    if (data.bulletinPosts) {
+        document.getElementById('bulletinList').innerHTML = data.bulletinPosts.map(createBulletinHtml).join('');
+    }
+});
+
+// Listen for new pins
+window.zorgSocket.on('new-bulletin', (pin) => {
+    const list = document.getElementById('bulletinList');
+    list.insertAdjacentHTML('afterbegin', createBulletinHtml(pin));
+
+    // Notify if we didn't write it
+    if (pin.author !== zUsername) {
+        addNotification('New Notice Pinned', `By ${pin.author}: ${pin.text.substring(0, 30)}...`, false);
+    }
+});
+
+// Listen for deleted pins
+window.zorgSocket.on('remove-bulletin', (id) => {
+    const pinEl = document.getElementById(`pin-${id}`);
+    if (pinEl) pinEl.remove();
+});
