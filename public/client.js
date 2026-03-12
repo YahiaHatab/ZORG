@@ -453,6 +453,7 @@ function handleLogin() {
 
 function updateProfileUI() {
     document.getElementById('userProfile').classList.remove('hidden');
+    document.getElementById('notificationWidget').classList.remove('hidden');
     document.getElementById('profileName').innerHTML = `${zUsername} <span class="text-[0.6rem] ml-1">🟢</span>`;
     document.getElementById('scrapeCount').innerText = zScrapeCount;
 }
@@ -1014,6 +1015,9 @@ document.addEventListener('click', function (event) {
 
 // -- BULLETIN BOARD SYSTEM --
 
+// -- BULLETIN BOARD SYSTEM --
+let selectedBulletinFile = null;
+
 function toggleBulletinInput() {
     const container = document.getElementById('bulletinInputContainer');
     container.classList.toggle('hidden');
@@ -1023,14 +1027,120 @@ function toggleBulletinInput() {
     }
 }
 
-function submitBulletin() {
-    const input = document.getElementById('bulletinTextInput');
-    const text = input.value.trim();
-    if (!text) return;
+function handleBulletinFileSelect(input) {
+    if (input.files && input.files[0]) {
+        selectedBulletinFile = input.files[0];
+        document.getElementById('bulletinFileName').innerText = selectedBulletinFile.name;
+        document.getElementById('bulletinFilePreview').classList.remove('hidden');
+        document.getElementById('bulletinFilePreview').classList.add('flex');
+    }
+}
 
-    window.zorgSocket.emit('add-bulletin', text);
-    input.value = '';
-    toggleBulletinInput(); // Close it after sending
+function removeBulletinFile() {
+    selectedBulletinFile = null;
+    document.getElementById('bulletinFileInput').value = '';
+    document.getElementById('bulletinFilePreview').classList.add('hidden');
+    document.getElementById('bulletinFilePreview').classList.remove('flex');
+}
+
+async function submitBulletin() {
+    const textInput = document.getElementById('bulletinTextInput');
+    const text = textInput.value.trim();
+    const btn = document.getElementById('bulletinSubmitBtn');
+
+    if (!text && !selectedBulletinFile) return;
+
+    btn.disabled = true;
+    btn.innerText = "UPLOADING...";
+    btn.classList.add('opacity-50');
+
+    let fileUrl = null;
+    let fileName = null;
+
+    try {
+        if (selectedBulletinFile) {
+            const formData = new FormData();
+            formData.append('file', selectedBulletinFile);
+
+            const response = await fetch('/upload-bulletin-file', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) throw new Error("File upload failed.");
+            const data = await response.json();
+            fileUrl = data.url;
+            fileName = data.originalName;
+        }
+
+        // Package everything together and send to server
+        window.zorgSocket.emit('add-bulletin', { text: text, fileUrl: fileUrl, fileName: fileName });
+
+        // Clean up UI
+        textInput.value = '';
+        removeBulletinFile();
+        toggleBulletinInput();
+
+    } catch (err) {
+        showToast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "Push to Board";
+        btn.classList.remove('opacity-50');
+    }
+}
+
+function deleteBulletin(id) {
+    window.zorgSocket.emit('delete-bulletin', id);
+}
+
+function linkify(text) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, function (url) {
+        return `<a href="${url}" target="_blank" class="text-blue-400 underline hover:text-blue-300 pointer-events-auto break-all">${url}</a>`;
+    });
+}
+
+function createBulletinHtml(pin) {
+    const date = new Date(pin.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const time = new Date(pin.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const canDelete = isUserAdmin || pin.author === zUsername;
+    const deleteBtn = canDelete ? `
+        <button onclick="deleteBulletin(${pin.id})" class="absolute top-2 right-2 text-slate-500 hover:text-red-400 transition-colors pointer-events-auto" title="Delete Pin">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>` : '';
+
+    // Create the File Attachment HTML if a file exists
+    let fileHtml = '';
+    if (pin.fileUrl) {
+        fileHtml = `
+            <a href="${pin.fileUrl}" target="_blank" download="${pin.fileName}" class="mt-2 flex items-center gap-2 bg-slate-900 border border-slate-700 hover:border-amber-500/50 p-2 rounded-lg group transition-colors pointer-events-auto shadow-inner">
+                <div class="bg-amber-500/20 text-amber-400 p-1.5 rounded-md group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-[10px] font-bold text-slate-300 truncate">${pin.fileName}</p>
+                    <p class="text-[8px] text-slate-500 uppercase tracking-widest">Click to Download</p>
+                </div>
+            </a>
+        `;
+    }
+
+    // Only render the text paragraph if there's actual text
+    const textHtml = pin.text ? `<p class="text-xs text-slate-200 font-medium leading-relaxed whitespace-pre-wrap mt-1">${linkify(pin.text)}</p>` : '';
+
+    return `
+        <div class="relative p-3 rounded-xl border border-amber-500/20 bg-amber-900/10 shadow-inner fade-in-up group pr-6" id="pin-${pin.id}">
+            ${deleteBtn}
+            <div class="flex items-baseline gap-2 mb-1.5">
+                <span class="text-[9px] font-black uppercase tracking-widest text-amber-500">${pin.author}</span>
+                <span class="text-[8px] font-mono text-slate-500">${date} - ${time}</span>
+            </div>
+            ${textHtml}
+            ${fileHtml}
+        </div>
+    `;
 }
 
 function deleteBulletin(id) {
@@ -1049,12 +1159,41 @@ function createBulletinHtml(pin) {
     const date = new Date(pin.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
     const time = new Date(pin.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // Only show delete button if user is Admin OR they wrote the pin
     const canDelete = isUserAdmin || pin.author === zUsername;
     const deleteBtn = canDelete ? `
         <button onclick="deleteBulletin(${pin.id})" class="absolute top-2 right-2 text-slate-500 hover:text-red-400 transition-colors pointer-events-auto" title="Delete Pin">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>` : '';
+
+    let fileHtml = '';
+    // This is the part your browser was missing!
+    if (pin.fileUrl) {
+        const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(pin.fileName);
+
+        if (isImage) {
+            fileHtml = `
+                <div class="mt-2 rounded-lg overflow-hidden border border-slate-700/50 shadow-md pointer-events-auto">
+                    <a href="${pin.fileUrl}" target="_blank" title="Click to view full size">
+                        <img src="${pin.fileUrl}" alt="${pin.fileName}" class="w-full max-h-48 object-cover hover:opacity-80 transition-opacity">
+                    </a>
+                </div>
+            `;
+        } else {
+            fileHtml = `
+                <a href="${pin.fileUrl}" target="_blank" download="${pin.fileName}" class="mt-2 flex items-center gap-2 bg-slate-900 border border-slate-700 hover:border-amber-500/50 p-2 rounded-lg group transition-colors pointer-events-auto shadow-inner">
+                    <div class="bg-amber-500/20 text-amber-400 p-1.5 rounded-md group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-[10px] font-bold text-slate-300 truncate">${pin.fileName}</p>
+                        <p class="text-[8px] text-slate-500 uppercase tracking-widest">Click to Download</p>
+                    </div>
+                </a>
+            `;
+        }
+    }
+
+    const textHtml = pin.text ? `<p class="text-xs text-slate-200 font-medium leading-relaxed whitespace-pre-wrap mt-1">${linkify(pin.text)}</p>` : '';
 
     return `
         <div class="relative p-3 rounded-xl border border-amber-500/20 bg-amber-900/10 shadow-inner fade-in-up group pr-6" id="pin-${pin.id}">
@@ -1063,7 +1202,8 @@ function createBulletinHtml(pin) {
                 <span class="text-[9px] font-black uppercase tracking-widest text-amber-500">${pin.author}</span>
                 <span class="text-[8px] font-mono text-slate-500">${date} - ${time}</span>
             </div>
-            <p class="text-xs text-slate-200 font-medium leading-relaxed whitespace-pre-wrap">${linkify(pin.text)}</p>
+            ${textHtml}
+            ${fileHtml}
         </div>
     `;
 }

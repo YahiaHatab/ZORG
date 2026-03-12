@@ -6,6 +6,7 @@ const { AsyncLocalStorage } = require('async_hooks');
 const axios = require('axios');
 const http = require('http');
 const { Server } = require('socket.io');
+const multer = require('multer');
 
 const asyncLocalStorage = new AsyncLocalStorage();
 
@@ -36,6 +37,28 @@ const PORT = 3000;
 
 app.use(express.static(path.join(__dirname, 'public'))); // CRITICAL: Serves index.html, style.css, client.js
 app.use(express.json());
+
+// --- FILE UPLOAD CONFIGURATION ---
+const uploadDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadDir),
+    filename: (req, file, cb) => {
+        // Sanitize filename to prevent weird character bugs
+        const safeName = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        cb(null, Date.now() + '-' + safeName);
+    }
+});
+const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB limit
+
+app.post('/upload-bulletin-file', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+    res.json({
+        url: `/uploads/${req.file.filename}`,
+        originalName: req.file.originalname
+    });
+});
 
 // --- DYNAMIC ENGINES ---
 const enginesFile = path.join(__dirname, 'engines.json');
@@ -618,13 +641,26 @@ io.on('connection', (socket) => {
     }
 
     // --- BULLETIN BOARD ROUTES ---
-    socket.on('add-bulletin', (text) => {
+    socket.on('add-bulletin', (data) => {
         const sender = activeUsers[socket.id];
-        if (!sender || !text.trim()) return;
+        if (!sender || !data) return;
 
-        const newPin = { id: Date.now(), author: sender.name, text: text.trim(), timestamp: Date.now() };
+        // Safely extract text to prevent server crashes if it's empty
+        const safeText = (data.text || '').trim();
+
+        if (!safeText && !data.fileUrl) return; // Ignore completely blank pins
+
+        const newPin = {
+            id: Date.now(),
+            author: sender.name,
+            text: safeText,
+            fileUrl: data.fileUrl || null,
+            fileName: data.fileName || null,
+            timestamp: Date.now()
+        };
+
         bulletinPosts.unshift(newPin);
-        if (bulletinPosts.length > 30) bulletinPosts.pop(); // Keep max 30 pins
+        if (bulletinPosts.length > 30) bulletinPosts.pop();
 
         fs.writeFileSync(bulletinFile, JSON.stringify(bulletinPosts, null, 2));
         io.emit('new-bulletin', newPin);

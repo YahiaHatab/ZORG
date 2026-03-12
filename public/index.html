@@ -126,13 +126,42 @@
                     </button>
                 </div>
 
-                <div id="bulletinInputContainer" class="hidden mb-4 flex-col gap-2 transition-all">
+                <div id="bulletinInputContainer" class="hidden mb-4 flex-col gap-2 transition-all shrink-0">
                     <textarea id="bulletinTextInput"
-                        class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 outline-none focus:border-amber-500/50 resize-none h-20 shadow-inner"
-                        placeholder="Paste links, dates, or notes here..."></textarea>
-                    <button onclick="submitBulletin()"
-                        class="w-full bg-amber-600 hover:bg-amber-500 text-white font-black uppercase tracking-widest text-[10px] p-2.5 rounded-xl transition-colors shadow-lg shadow-amber-900/20">Push
-                        to Board</button>
+                        class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 outline-none focus:border-amber-500/50 resize-none h-16 shadow-inner"
+                        placeholder="Type a note or attach a file..."></textarea>
+
+                    <div id="bulletinFilePreview"
+                        class="hidden items-center justify-between bg-slate-800 border border-slate-700 p-2 rounded-lg">
+                        <span id="bulletinFileName"
+                            class="text-[10px] text-amber-400 font-mono truncate max-w-[200px]">filename.pdf</span>
+                        <button onclick="removeBulletinFile()" class="text-slate-500 hover:text-red-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <input type="file" id="bulletinFileInput" class="hidden"
+                            onchange="handleBulletinFileSelect(this)">
+
+                        <button onclick="document.getElementById('bulletinFileInput').click()"
+                            class="w-10 h-10 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-amber-400 rounded-xl flex items-center justify-center transition-colors shadow-lg"
+                            title="Attach File">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                        </button>
+
+                        <button onclick="submitBulletin()" id="bulletinSubmitBtn"
+                            class="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-black uppercase tracking-widest text-[10px] rounded-xl transition-colors shadow-lg shadow-amber-900/20">Push
+                            to Board</button>
+                    </div>
                 </div>
 
                 <div id="bulletinList" class="flex-1 overflow-y-auto dropdown-scroll space-y-3 pr-1">
