@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>ZORG-Ω | Architect</title>
+    <link rel="icon" type="image/x-icon" href="/Icons/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body
+    class="bg-slate-950 bg-[url('/Icons/Background.png')] bg-cover bg-center bg-fixed bg-no-repeat text-white min-h-screen flex items-center justify-center p-6 relative font-sans before:fixed before:inset-0 before:bg-slate-950/60 before:-z-10">
+    <div class="absolute top-6 left-6 z-[60] flex items-center gap-4">
+        <div id="userProfile"
+            class="flex hidden items-center gap-4 bg-slate-900/60 p-3 pr-6 rounded-2xl border border-slate-700/50 shadow-xl backdrop-blur-md transition-all">
+            <div
+                class="h-10 w-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+            </div>
+            <div>
+                <h3 id="profileName" class="font-black text-sm text-slate-200 tracking-wide uppercase"><span
+                        id="welcome-user">Loading...</span></h3>
+                <p class="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-0.5">Shows Scraped Today:
+                    <span id="scrapeCount" class="text-blue-400">0</span>
+                </p>
+            </div>
+        </div>
+
+        <div id="adminUpdatePanel"
+            class="hidden flex items-center bg-slate-900/70 p-2 rounded-2xl border border-purple-900/50 shadow-xl backdrop-blur-md transition-all">
+            <button onclick="clearSystemLogs()"
+                class="w-10 h-10 shrink-0 rounded-xl bg-red-600/20 hover:bg-red-600/40 text-red-500 mr-2 flex items-center justify-center transition-colors border border-red-500/30"
+                title="Clear All System Updates">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            </button>
+            <button onclick="toggleAdminPanel()"
+                class="w-10 h-10 shrink-0 rounded-xl bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 flex items-center justify-center transition-colors border border-purple-500/30"
+                title="Broadcast System Update">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                </svg>
+            </button>
+            <div id="adminUpdateInputs"
+                class="flex items-center overflow-hidden transition-all duration-300 max-w-0 opacity-0 whitespace-nowrap">
+                <select id="adminUpdateCategory"
+                    class="w-24 p-2.5 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs text-slate-300 ml-2 shadow-inner">
+                    <option value="Update">Update</option>
+                    <option value="Alert">Alert</option>
+                    <option value="Fix">Fix</option>
+                </select>
+                <input id="adminUpdateText" type="text" placeholder="Type system broadcast message..."
+                    class="w-64 p-2.5 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs text-slate-200 shadow-inner ml-2"
+                    onkeydown="if(event.key === 'Enter') broadcastUpdate()">
+                <button onclick="broadcastUpdate()"
+                    class="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl transition-colors shadow-lg shadow-purple-900/40 uppercase tracking-widest shrink-0 ml-2">Post</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="onlineSidebar"
+        class="absolute top-6 right-6 bottom-6 w-72 bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-4 shadow-xl z-[40] hidden sm:flex flex-col transition-all gap-4">
+        <div class="flex-1 flex flex-col min-h-[40%]">
+            <h3
+                class="text-xs font-black text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Online Now
+            </h3>
+            <div id="onlineList" class="flex-1 overflow-y-auto space-y-2 dropdown-scroll pr-1"></div>
+        </div>
+
+        <div id="whisperBox"
+            class="hidden shrink-0 flex-col bg-slate-950/50 border-t border-b border-slate-700/50 p-3 mb-2 rounded-xl">
+            <div class="flex items-center justify-between mb-2">
+                <span id="whisperTargetUi"
+                    class="text-[10px] font-black uppercase text-purple-400 tracking-widest">Message to User</span>
+                <button onclick="closeWhisper()" class="text-slate-500 hover:text-red-400 transition-colors"
+                    title="Close">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="flex gap-2">
+                <input id="whisperInput" type="text" placeholder="Whisper..."
+                    class="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-xs outline-none focus:border-purple-500/50 text-slate-200 transition-colors shadow-inner"
+                    onkeydown="if(event.key === 'Enter') sendWhisper()">
+                <button onclick="sendWhisper()"
+                    class="bg-purple-600 hover:bg-purple-500 text-white rounded-lg p-2 font-bold transition-colors shadow-lg shadow-purple-900/40">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path fill-rule="evenodd"
+                            d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z"
+                            clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 flex flex-col min-h-[40%] border-t border-slate-700/50 pt-4">
+            <h3
+                class="text-xs font-black text-purple-400 uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-2">
+                <span class="w-2 h-2 rounded-full bg-purple-500"></span> System Updates
+            </h3>
+            <div id="updatesList" class="flex-1 overflow-y-auto space-y-3 dropdown-scroll pr-1"></div>
+        </div>
+    </div>
+
+    <div id="loginOverlay"
+        class="fixed inset-0 z-[200] flex hidden items-center justify-center bg-slate-950/80 backdrop-blur-md border border-slate-800 transition-opacity duration-500">
+        <div
+            class="bg-slate-900/90 p-8 rounded-3xl border border-blue-900/50 shadow-[0_0_100px_rgba(0,0,0,0.8)] max-w-sm w-full transform transition-all text-center">
+            <div class="flex justify-center mb-6">
+                <div
+                    class="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-600/30">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+            </div>
+            <h2 class="text-2xl font-black text-white mb-2 tracking-tighter uppercase">ZORG-Ω Access</h2>
+            <p class="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-8">Identify yourself to proceed
+            </p>
+            <input id="loginName" type="text" placeholder="Designation (Your Name)"
+                class="w-full p-4 rounded-xl bg-slate-950 border border-slate-700 outline-none text-center font-bold text-lg focus:border-blue-500 shadow-inner mb-6 transition-colors"
+                autocomplete="off" onkeydown="if(event.key === 'Enter') handleLogin()">
+            <button onclick="handleLogin()"
+                class="w-full bg-blue-600 p-4 rounded-xl font-black text-sm hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/40 active:scale-95 tracking-widest uppercase mb-4">INITIALIZE</button>
+        </div>
+    </div>
+
+    <div id="customDialogModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[100] p-4">
+        <div
+            class="bg-slate-900/95 backdrop-blur-2xl p-6 rounded-2xl border border-blue-500/50 shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-sm transform transition-all">
+            <h3 id="dialogTitle" class="text-xl font-black text-blue-400 mb-3 italic tracking-tighter uppercase">Notice
+            </h3>
+            <p id="dialogMessage" class="text-sm text-slate-300 mb-5 font-medium"></p>
+            <input id="dialogInput" type="password" placeholder="Password..."
+                class="hidden w-full p-3 mb-5 rounded-xl bg-slate-950 border border-slate-700 outline-none text-sm text-center font-mono focus:border-blue-500/50 transition-colors">
+            <div class="flex gap-3 justify-end">
+                <button id="dialogCancelBtn"
+                    class="px-5 py-2.5 rounded-xl bg-slate-800 text-slate-400 font-bold hover:bg-slate-700 hover:text-white transition-all text-sm hidden">Cancel</button>
+                <button id="dialogConfirmBtn"
+                    class="px-5 py-2.5 rounded-xl bg-blue-600 text-white font-black hover:bg-blue-500 transition-all text-sm uppercase tracking-wider">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-[200] flex flex-col items-end gap-3 pointer-events-none">
+    </div>
+
+    <div id="successModal"
+        class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[150] p-4 backdrop-blur-sm">
+        <div
+            class="bg-slate-900/90 backdrop-blur-2xl p-8 rounded-3xl border border-emerald-500/50 shadow-[0_0_80px_rgba(16,185,129,0.2)] w-full max-w-md transform transition-all text-center">
+            <div
+                class="mx-auto w-20 h-20 bg-emerald-900/50 rounded-full flex items-center justify-center mb-6 border border-emerald-500/30 shadow-inner">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-emerald-400" fill="none"
+                    viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <h2 class="text-3xl font-black text-emerald-400 mb-2 italic tracking-tighter uppercase drop-shadow-md">
+                Extraction Complete!</h2>
+            <p id="successModalDesc" class="text-slate-300 font-medium mb-8 text-lg">0 Distinct Records Assembled.
+                Exporting...</p>
+            <button onclick="closeSuccessModal()"
+                class="w-full bg-emerald-600 p-4 rounded-xl font-black text-lg text-white hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-900/20 active:scale-95 tracking-tight uppercase">Acknowledge</button>
+        </div>
+    </div>
+
+    <div id="uploadModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4">
+        <div
+            class="bg-slate-900/90 backdrop-blur-2xl p-6 rounded-2xl border border-blue-900/80 shadow-[0_0_50px_rgba(0,0,0,0.7)] w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
+            <button onclick="closeUploadModal()"
+                class="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+            <h2 id="modalTitle" class="text-2xl font-black text-blue-400 mb-4 italic tracking-tighter uppercase">
+                Register New Engine</h2>
+            <div class="space-y-4">
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label
+                            class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Engine
+                            ID (<span class="text-emerald-400">Re-use ID to Update</span>)</label>
+                        <input id="upId" type="text" placeholder="e.g. custom_bot"
+                            class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm font-mono">
+                    </div>
+                    <div class="flex-1">
+                        <label
+                            class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Display
+                            Name</label>
+                        <input id="upName" type="text" placeholder="e.g. TradeShow Bot"
+                            class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm">
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label
+                            class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Category</label>
+                        <div class="relative">
+                            <select id="upCategory"
+                                class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm text-white focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all shadow-inner appearance-none cursor-pointer">
+                                <option value="Custom" class="bg-slate-800 text-white">Custom</option>
+                                <option value="General" class="bg-slate-800 text-white">General</option>
+                            </select>
+                            <div
+                                class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label
+                            class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Input
+                            Field Names (Comma Separated)</label>
+                        <input id="upInputType" type="text" placeholder="e.g. Target URL, Username, Password"
+                            class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label
+                        class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Instructions
+                        String</label>
+                    <textarea id="upInst"
+                        placeholder="Instructions displayed when engine is selected... (Supports multiple lines)"
+                        class="w-full p-3 h-24 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm"></textarea>
+                </div>
+                <div>
+                    <label
+                        class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 flex justify-between">
+                        <span>Engine Code (Node.js)</span>
+                        <span class="text-blue-500 font-normal normal-case italic">Follow EngineTemplate.md</span>
+                    </label>
+                    <textarea id="upCode" placeholder="module.exports = async function(params, emitLog) { ... };"
+                        class="w-full p-4 h-64 rounded-xl bg-slate-950 border border-slate-700 outline-none text-[11px] font-mono whitespace-pre text-green-400"></textarea>
+                </div>
+                <button onclick="submitUpload()"
+                    class="w-full bg-blue-600 p-4 rounded-xl font-black text-lg hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/20 active:scale-95 tracking-tight uppercase">Inject
+                    / Update Engine into Core</button>
+            </div>
+        </div>
+    </div>
+
+    <div
+        class="absolute bottom-4 left-6 text-slate-400/50 text-sm font-bold uppercase tracking-widest italic z-0 drop-shadow-lg">
+        Powered by YahiaH</div>
+    <div
+        class="bg-slate-900/85 backdrop-blur-xl p-8 rounded-2xl border border-slate-800/80 w-full max-w-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] z-10">
+        <div class="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+            <div>
+                <h1 class="text-4xl font-black text-blue-500 tracking-tighter italic">ZORG-Ω</h1>
+                <p class="text-[10px] text-slate-500 font-mono uppercase">Architect v6.0 Modular | Standardizer Active
+                </p>
+                <p class="text-[9px] text-blue-500/50 font-mono tracking-widest mt-1">SYSTEM_CORES: [<span
+                        id="engineCountBadge">0</span>]</p>
+            </div>
+            <div id="counterArea" class="text-right hidden">
+                <div id="loader" class="flex items-center space-x-1 mb-1">
+                    <span class="dot dot1"></span><span class="dot dot2"></span><span class="dot"></span>
+                </div>
+                <div id="completeText"
+                    class="hidden text-emerald-400 font-black text-xl italic uppercase tracking-tighter shadow-emerald-900/50 drop-shadow-md">
+                    Complete</div>
+                <div id="errorText"
+                    class="hidden text-red-500 font-black text-xl italic uppercase tracking-tighter shadow-red-900/50 drop-shadow-md">
+                    Error</div>
+            </div>
+        </div>
+
+        <div id="instructionPanel" class="mb-4 p-4 bg-slate-950/40 rounded-xl border border-blue-900/20">
+            <h3 class="text-[10px] font-bold text-blue-400 uppercase mb-1 tracking-widest">Protocol</h3>
+            <div id="instructionContent" class="text-[11px] text-slate-400 leading-relaxed italic whitespace-pre-wrap">
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <div class="flex gap-3 items-center relative">
+                <input type="hidden" id="mode" value="marketplace">
+
+                <div class="flex-1 relative">
+                    <button id="dropdownBtn" onclick="toggleDropdownMenu()"
+                        class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 text-blue-400 font-bold text-left flex justify-between items-center hover:bg-slate-700/50 transition-colors shadow-inner relative z-30">
+                        <span id="dropdownBtnText">Map-Dynamics (Marketplace)</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" viewBox="0 0 20 20"
+                            fill="currentColor">
+                            <path fill-rule="evenodd"
+                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                                clip-rule="evenodd" />
+                        </svg>
+                    </button>
+
+                    <div id="dropdownMenu"
+                        class="hidden absolute top-full left-0 w-full mt-2 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-40 overflow-hidden flex flex-col max-h-[24rem]">
+                        <div class="p-3 border-b border-slate-700/50 bg-slate-800/80 sticky top-0 z-10 hidden"
+                            id="searchContainer">
+                            <div class="relative">
+                                <input type="text" id="engineSearchInput" onkeyup="filterEngines()"
+                                    placeholder="Search engines..."
+                                    class="w-full p-2 pl-9 bg-slate-900/50 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg"
+                                    class="h-4 w-4 absolute left-3 top-2.5 text-slate-500" fill="none"
+                                    viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div id="engineListContainer" class="overflow-y-auto dropdown-scroll flex-1">
+                        </div>
+                        <div id="noResults" class="hidden text-center p-4 text-slate-500 text-sm font-mono italic">No
+                            engines found</div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleSearch()"
+                        class="w-12 h-12 bg-slate-800 text-slate-400 rounded-xl hover:bg-slate-700 hover:text-blue-400 transition-all border border-slate-700 hover:border-slate-500/50 flex items-center justify-center shrink-0 shadow-lg shadow-black/40 z-20"
+                        title="Search Engines">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </button>
+                </div>
+
+                <button onclick="openUploadModal()"
+                    class="w-12 h-12 bg-slate-800 text-blue-500 rounded-xl hover:bg-slate-700 hover:text-blue-400 transition-all border border-slate-700 hover:border-blue-500/50 flex items-center justify-center shrink-0 shadow-lg shadow-black/40 z-20"
+                    title="Upload Custom Script">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                </button>
+            </div>
+
+            <div id="standardBox" class="hidden"><input id="url" type="text" placeholder="Domain (e.g. www.wire.de)"
+                    class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none"></div>
+            <div id="curlBox" class="hidden"><textarea id="curl" placeholder="Paste cURL Command here..."
+                    class="w-full p-4 h-24 rounded-xl bg-slate-800 border border-slate-700 outline-none text-xs font-mono"></textarea>
+            </div>
+            <div id="eshowBox" class="hidden"><input id="token" type="text" placeholder="Bearer Token"
+                    class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none"></div>
+            <div id="cadBox" class="hidden space-y-3">
+                <input id="cadEventId" type="text" placeholder="Event ID"
+                    class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">
+                <input id="cadClientId" type="text" placeholder="Client ID"
+                    class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700">
+                <input id="cadEventKey" type="text" placeholder="Event Key"
+                    class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700">
+            </div>
+            <div id="marketBox" class="space-y-3">
+                <input id="dynamicShowId" type="text" placeholder="Show ID"
+                    class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">
+                <input id="cookie" type="text" placeholder="PHPSESSID Cookie"
+                    class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">
+            </div>
+            <div id="customInputBox" class="hidden space-y-3"></div>
+
+            <input id="file" type="text" placeholder="Output Filename (Optional) - Defaults to Show URL/ID"
+                class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">
+
+            <div class="flex gap-3 relative">
+                <button id="btn" onclick="run()"
+                    class="w-full bg-blue-600 p-5 rounded-xl font-black text-xl hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/20 active:scale-95 tracking-tight">EXECUTE
+                    ARCHITECT</button>
+
+                <button id="stopBtn" onclick="stopRun()"
+                    class="w-20 bg-slate-800 text-red-500 border border-slate-700 hover:border-red-500/50 hover:bg-slate-700 transition-all rounded-xl focus:outline-none flex items-center justify-center shrink-0 shadow-lg shadow-black/40 pointer-events-none opacity-50"
+                    title="Emergency Stop">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                    </svg>
+                </button>
+
+                <button id="clearInputsBtn" onclick="clearInputs()"
+                    class="w-16 bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-500 hover:text-white hover:bg-slate-700 transition-all rounded-xl focus:outline-none flex items-center justify-center shrink-0 shadow-lg shadow-black/40"
+                    title="Clear All Inputs">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+            </div>
+
+            <div id="telemetryBox" class="hidden mt-4 relative group">
+                <div class="flex justify-between items-end mb-1 pl-1 pr-1">
+                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Live Telemetry</p>
+                    <div
+                        class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-3 text-[9px] font-bold uppercase tracking-widest">
+                        <button onclick="copyTelemetry()"
+                            class="text-slate-400 hover:text-blue-400 transition-colors flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg> Copy All
+                        </button>
+                        <button onclick="clearTelemetry()"
+                            class="text-slate-400 hover:text-red-400 transition-colors flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg> Clear
+                        </button>
+                        <button id="pauseTelemetryBtn" onclick="toggleTelemetryScroll()"
+                            class="text-slate-400 hover:text-yellow-400 transition-colors flex items-center gap-1">
+                            <svg id="pauseIcon" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg> <span id="pauseText">Pause</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="telemetry"
+                    class="bg-black border border-slate-700 rounded-xl p-3 h-40 overflow-y-auto font-mono text-[10px] text-green-400 shadow-inner break-words">
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 flex justify-center items-center gap-6">
+            <label class="cursor-pointer group flex items-center gap-2" title="Test Mode (Max 5 items extracted)">
+                <input type="checkbox" id="testModeToggle" class="sr-only peer">
+                <div class="w-2.5 h-2.5 rounded-full bg-slate-700 peer-checked:bg-purple-500 transition-colors"></div>
+                <span
+                    class="text-slate-600 hover:text-purple-400 text-[10px] font-bold transition-colors select-none peer-checked:text-purple-400">TEST
+                    MODE</span>
+            </label>
+            <button onclick="shutdown()"
+                class="text-slate-600 hover:text-red-500 text-[10px] font-bold transition-colors">TERMINATE
+                SESSION</button>
+        </div>
+    </div>
+
+    <script src="client.js?v=2"></script>
+</body>
+
+</html>

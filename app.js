@@ -10,7 +10,6 @@ const { Server } = require('socket.io');
 const asyncLocalStorage = new AsyncLocalStorage();
 
 // --- GLOBAL INTERCEPTORS ---
-// Automatically abort any network requests from any engine without code changes!
 axios.interceptors.request.use(config => {
     const store = asyncLocalStorage.getStore();
     if (store && store.runState && store.runState.aborted) {
@@ -30,13 +29,12 @@ if (typeof global.fetch === 'function') {
     };
 }
 
-// --- DYNAMIC ENGINES INJECTION READY ---
-
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const PORT = 3000;
 
+app.use(express.static(path.join(__dirname, 'public'))); // CRITICAL: Serves index.html, style.css, client.js
 app.use(express.json());
 
 // --- DYNAMIC ENGINES ---
@@ -112,13 +110,11 @@ app.post('/run', async (req, res) => {
 
     let runState = { aborted: false };
 
-    // Listen for explicit abort requests from the client (fetch aborted)
     req.on('aborted', () => {
         runState.aborted = true;
         emitLog("Client manually aborted the request. Halting operation...");
     });
 
-    // Also catch if the underlying socket closes before we could send the response
     res.on('close', () => {
         if (!res.writableEnded && !runState.aborted) {
             runState.aborted = true;
@@ -126,7 +122,7 @@ app.post('/run', async (req, res) => {
         }
     });
 
-    globalLogs = []; // Reset telemetry for new run
+    globalLogs = [];
     emitLog(`--- RUN PROTOCOL STARTED: ${mode.toUpperCase()} ---`);
 
     let originalPush = Array.prototype.push;
@@ -274,45 +270,30 @@ app.post('/run', async (req, res) => {
     }
 });
 
-// --- ENGINE UPLOAD ROUTE ---
+// --- ENGINE ROUTES ---
 app.post('/upload-engine', (req, res) => {
     try {
         const { id, name, instruction, inputType, category, code } = req.body;
-        if (!id || !name || !code) {
-            throw new Error("Missing required fields. ID, Name, and Code are mandatory.");
-        }
+        if (!id || !name || !code) throw new Error("Missing required fields. ID, Name, and Code are mandatory.");
 
         const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
         const enginesDir = path.join(__dirname, 'Engines');
         if (!fs.existsSync(enginesDir)) fs.mkdirSync(enginesDir);
 
         const defaultScriptMap = {
-            'marketplace': 'MapDynamics.js',
-            'dusseldorf': 'Dusseldorf.js',
-            'algolia': 'Algolia.js',
-            'informa': 'Informa.js',
-            'eshow': 'Eshow.js',
-            'cadmium': 'Cadmium.js'
+            'marketplace': 'MapDynamics.js', 'dusseldorf': 'Dusseldorf.js', 'algolia': 'Algolia.js',
+            'informa': 'Informa.js', 'eshow': 'Eshow.js', 'cadmium': 'Cadmium.js'
         };
 
         const scriptPath = defaultScriptMap[safeId] ? path.join(enginesDir, defaultScriptMap[safeId]) : path.join(enginesDir, `${safeId}.js`);
         fs.writeFileSync(scriptPath, code);
 
         const existingIndex = customEngines.findIndex(e => e.id === safeId);
-        const engineData = {
-            id: safeId,
-            name,
-            instruction: instruction || '',
-            inputType: inputType !== undefined ? inputType : '',
-            category: category || 'Custom'
-        };
+        const engineData = { id: safeId, name, instruction: instruction || '', inputType: inputType !== undefined ? inputType : '', category: category || 'Custom' };
 
         let msgType = existingIndex >= 0 ? 'UPDATED' : 'INSTALLED';
-        if (existingIndex >= 0) {
-            customEngines[existingIndex] = engineData;
-        } else {
-            customEngines.push(engineData);
-        }
+        if (existingIndex >= 0) customEngines[existingIndex] = engineData;
+        else customEngines.push(engineData);
 
         fs.writeFileSync(enginesFile, JSON.stringify(customEngines, null, 2));
 
@@ -328,9 +309,8 @@ app.post('/upload-engine', (req, res) => {
             }
         }
 
-        // Notify UI of Core Count Change
         let currDel = [];
-        try { if(fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) currDel = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')); } catch(e){}
+        try { if (fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) currDel = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')); } catch (e) { }
         const newCount = 6 + customEngines.length - currDel.length;
         io.emit('update-engine-count', newCount);
 
@@ -342,7 +322,6 @@ app.post('/upload-engine', (req, res) => {
     }
 });
 
-// --- ENGINE FETCH ROUTE FOR EDITING ---
 app.get('/engine/:id', (req, res) => {
     try {
         const id = req.params.id;
@@ -375,24 +354,17 @@ app.get('/engine/:id', (req, res) => {
     }
 });
 
-// --- ENGINE DELETE ROUTE ---
 app.delete('/delete-engine/:id', (req, res) => {
     try {
         const id = req.params.id;
         const index = customEngines.findIndex(e => e.id === id);
 
         const defaultScriptMap = {
-            'marketplace': 'MapDynamics.js',
-            'dusseldorf': 'Dusseldorf.js',
-            'algolia': 'Algolia.js',
-            'informa': 'Informa.js',
-            'eshow': 'Eshow.js',
-            'cadmium': 'Cadmium.js'
+            'marketplace': 'MapDynamics.js', 'dusseldorf': 'Dusseldorf.js', 'algolia': 'Algolia.js',
+            'informa': 'Informa.js', 'eshow': 'Eshow.js', 'cadmium': 'Cadmium.js'
         };
 
-        if (index === -1 && !defaultScriptMap[id]) {
-            return res.status(404).json({ error: 'Engine not found.' });
-        }
+        if (index === -1 && !defaultScriptMap[id]) return res.status(404).json({ error: 'Engine not found.' });
 
         let engineName = id;
         if (index !== -1) {
@@ -416,13 +388,10 @@ app.delete('/delete-engine/:id', (req, res) => {
         }
 
         const scriptPath = defaultScriptMap[id] ? path.join(__dirname, 'Engines', defaultScriptMap[id]) : path.join(__dirname, 'Engines', `${id}.js`);
-        if (fs.existsSync(scriptPath)) {
-            fs.unlinkSync(scriptPath);
-        }
+        if (fs.existsSync(scriptPath)) fs.unlinkSync(scriptPath);
 
-        // Notify UI of Core Count Change
         let currDel = [];
-        try { if(fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) currDel = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')); } catch(e){}
+        try { if (fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) currDel = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')); } catch (e) { }
         const newCount = 6 + customEngines.length - currDel.length;
         io.emit('update-engine-count', newCount);
 
@@ -439,1362 +408,22 @@ app.post('/shutdown', (req, res) => {
     setTimeout(() => process.exit(0), 1000);
 });
 
-// --- FRONTEND UI ---
-app.get('/', (req, res) => {
-    // Group all engines
-    let deletedEngines = [];
-    try {
-        const delFile = path.join(__dirname, 'deleted_engines.json');
-        if (fs.existsSync(delFile)) deletedEngines = JSON.parse(fs.readFileSync(delFile, 'utf8'));
-    } catch (e) { }
-
-    const defaultEnginesBase = [
-        { id: 'marketplace', name: 'Map-Dynamics (Marketplace)' },
-        { id: 'dusseldorf', name: 'Messe Düsseldorf' },
-        { id: 'algolia', name: 'NürnbergMesse (Algolia)' },
-        { id: 'informa', name: 'Informa Markets (cURL)' },
-        { id: 'eshow', name: 'eShow (Concurrent)' },
-        { id: 'cadmium', name: 'Cadmium (Harvester)' }
-    ];
-
-    const allCategories = {
-        'General': []
-    };
-
-    defaultEnginesBase.forEach(def => {
-        if (deletedEngines.includes(def.id)) return;
-        const customOverride = customEngines.find(e => e.id === def.id);
-        if (customOverride) {
-            const cat = customOverride.category || 'General';
-            if (!allCategories[cat]) allCategories[cat] = [];
-            allCategories[cat].push({ id: def.id, name: customOverride.name, isCustom: false }); // keep false so dot stays blue
-        } else {
-            allCategories['General'].push({ id: def.id, name: def.name, isCustom: false });
-        }
-    });
-
-    customEngines.forEach(e => {
-        if (defaultEnginesBase.some(def => def.id === e.id)) return; // Handled above
-        if (deletedEngines.includes(e.id)) return;
-        const cat = e.category || 'Custom';
-        if (!allCategories[cat]) allCategories[cat] = [];
-        allCategories[cat].push({ id: e.id, name: e.name, isCustom: true });
-    });
-
-    let customDropdownHtml = '';
-    for (const [cat, engines] of Object.entries(allCategories)) {
-        const isGeneral = cat === 'General';
-        customDropdownHtml += `
-            <div class="border-b border-slate-700/50 last:border-b-0">
-                <div onclick="toggleCategory('${cat}')" class="bg-slate-800 hover:bg-slate-700/50 p-3 flex justify-between items-center cursor-pointer transition-colors group category-header" data-cat-name="${cat.toLowerCase()}">
-                    <span class="text-slate-400 font-bold text-[10px] uppercase tracking-widest group-hover:text-slate-300">${cat}</span>
-                    <svg id="icon-${cat}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-500 transition-transform duration-200 ${isGeneral ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
-                </div>
-                <div id="cat-${cat}" class="${isGeneral ? '' : 'hidden'} bg-slate-900/50">
-                    ${engines.map(e => `
-                        <div class="engine-item group p-3 pl-5 hover:bg-slate-800 cursor-pointer text-blue-400 font-bold text-sm border-t border-slate-800 transition-colors flex items-center justify-between" onclick="selectEngine('${e.id}', '${e.name.replace(/'/g, "\\'")}')" data-engine-name="${e.name.toLowerCase()}">
-                            <div class="flex flex-row items-center gap-2">
-                                <span class="w-1.5 h-1.5 rounded-full ${e.isCustom ? 'bg-purple-500' : 'bg-blue-500'}"></span>
-                                ${e.name}
-                            </div>
-                            <div class="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                                <button onclick="editEngine(event, '${e.id}')" class="text-slate-500 hover:text-blue-400 transition-colors flex items-center justify-center p-1" title="Edit Engine">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                </button>
-                                <button onclick="deleteEngine(event, '${e.id}')" class="text-slate-500 hover:text-red-400 transition-colors flex items-center justify-center p-1" title="Delete Engine">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                </button>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-    }
-
-    let customInstStr = customEngines.map(e => `inst["${e.id}"] = ${JSON.stringify(e.instruction || '')};`).join('\n');
-    let customToggleStr = customEngines.map(e => {
-        let input = (e.inputType || '').trim();
-        if (input === '' || input.toLowerCase() === 'none') {
-            return `if(m === '${e.id}') { document.getElementById('customInputBox').innerHTML = ''; document.getElementById('customInputBox').classList.add('hidden'); }`;
-        } else {
-            const inputs = input.split(',').map(s => s.trim()).filter(s => s);
-            const inputHtml = inputs.map((placeholder, idx) =>
-                '<input id="customInput_' + idx + '" type="text" placeholder="' + placeholder.replace(/"/g, '&quot;').replace(/'/g, "\\'") + '" class="custom-dynamic-input w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">'
-            ).join('');
-            return `if(m === '${e.id}') { document.getElementById('customInputBox').innerHTML = '${inputHtml}'; document.getElementById('customInputBox').classList.remove('hidden'); }`;
-        }
-    }).join('\n');
-
-    res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>ZORG-Ω | Architect</title>
-            <link rel="icon" type="image/x-icon" href="/Icons/favicon.ico">
-            <script src="https://cdn.tailwindcss.com"></script>
-            <script src="/socket.io/socket.io.js"></script>
-            <style>
-                @keyframes bounce { 0%, 80%, 100% { transform: scale(0); opacity: 0.3; } 40% { transform: scale(1.0); opacity: 1; } }
-                @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-                .fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
-                .dot { display: inline-block; width: 10px; height: 10px; background-color: #10b981; border-radius: 100%; animation: bounce 1.4s infinite ease-in-out both; }
-                .dot1 { animation-delay: -0.32s; } .dot2 { animation-delay: -0.16s; }
-                @keyframes pulseHighlight { 0% { border-color: rgba(51,65,85,1); box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05); } 30% { border-color: rgba(168,85,247,1); box-shadow: 0 0 20px rgba(168,85,247,0.6); } 100% { border-color: rgba(51,65,85,1); box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05); } }
-                .highlight-pulse { animation: pulseHighlight 2.5s ease-out; }
-                #telemetry::-webkit-scrollbar { width: 6px; }
-                #telemetry::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-                /* Custom scrollbar for dropdown */
-                .dropdown-scroll::-webkit-scrollbar { width: 4px; }
-                /* Custom style for search input expansion */
-                #searchInput { transition: width 0.3s ease, opacity 0.3s ease, padding 0.3s ease; }
-                #searchInput.expanded { width: 14rem; opacity: 1; padding: 0.5rem 1rem; }
-                #searchInput.collapsed { width: 0; opacity: 0; padding: 0; border: none; }
-                
-                /* Custom styles to make default dropdown look more like a custom select */
-                select#upCategory {
-                    -webkit-appearance: none;
-                    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
-                    background-repeat: no-repeat;
-                    background-position: right 1rem top 50%;
-                    background-size: 0.65em auto;
-                }
-                select#upCategory option {
-                    background-color: #1e293b;
-                    color: white;
-                }
-            </style>
-        </head>
-        <body class="bg-slate-950 bg-[url('/Icons/Background.png')] bg-cover bg-center bg-fixed bg-no-repeat text-white min-h-screen flex items-center justify-center p-6 relative font-sans before:fixed before:inset-0 before:bg-slate-950/60 before:-z-10">
-            <!-- TOP LEFT CORNER WIDGETS -->
-            <div class="absolute top-6 left-6 z-[60] flex items-center gap-4">
-                <!-- USER PROFILE WIDGET -->
-                <div id="userProfile" class="flex hidden items-center gap-4 bg-slate-900/60 p-3 pr-6 rounded-2xl border border-slate-700/50 shadow-xl backdrop-blur-md transition-all">
-                    <div class="h-10 w-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                    </div>
-                    <div>
-                        <h3 id="profileName" class="font-black text-sm text-slate-200 tracking-wide uppercase">Hi, Agent</h3>
-                        <p class="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-0.5">Shows Scraped Today: <span id="scrapeCount" class="text-blue-400">0</span></p>
-                    </div>
-                </div>
-
-                <!-- ADMIN BROADCAST WIDGET -->
-                <div id="adminUpdatePanel" class="hidden flex items-center bg-slate-900/70 p-2 rounded-2xl border border-purple-900/50 shadow-xl backdrop-blur-md transition-all">
-                    <!-- Clear Logs Button -->
-                    <button onclick="clearSystemLogs()" class="w-10 h-10 shrink-0 rounded-xl bg-red-600/20 hover:bg-red-600/40 text-red-500 mr-2 flex items-center justify-center transition-colors border border-red-500/30" title="Clear All System Updates">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
-                    <!-- Expand Action for Input -->
-                    <button onclick="toggleAdminPanel()" class="w-10 h-10 shrink-0 rounded-xl bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 flex items-center justify-center transition-colors border border-purple-500/30" title="Broadcast System Update">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
-                    </button>
-                    
-                    <div id="adminUpdateInputs" class="flex items-center overflow-hidden transition-all duration-300 max-w-0 opacity-0 whitespace-nowrap">
-                        <select id="adminUpdateCategory" class="w-24 p-2.5 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs text-slate-300 ml-2 shadow-inner">
-                            <option value="Update">Update</option>
-                            <option value="Alert">Alert</option>
-                            <option value="Fix">Fix</option>
-                        </select>
-                        <input id="adminUpdateText" type="text" placeholder="Type system broadcast message..." class="w-64 p-2.5 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs text-slate-200 shadow-inner ml-2" onkeydown="if(event.key === 'Enter') broadcastUpdate()">
-                        <button onclick="broadcastUpdate()" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl transition-colors shadow-lg shadow-purple-900/40 uppercase tracking-widest shrink-0 ml-2">Post</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ONLINE & UPDATES SIDEBAR -->
-            <div id="onlineSidebar" class="absolute top-6 right-6 bottom-6 w-72 bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-4 shadow-xl z-[40] hidden sm:flex flex-col transition-all gap-4">
-                <div class="flex-1 flex flex-col min-h-[40%]">
-                    <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-2">
-                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Online Now
-                    </h3>
-                    <div id="onlineList" class="flex-1 overflow-y-auto space-y-2 dropdown-scroll pr-1">
-                        <!-- Users injected here -->
-                    </div>
-                </div>
-                
-                <!-- WHISPER BOX UI moved right here underneath onlineNow to keep it high -->
-                <div id="whisperBox" class="hidden shrink-0 flex-col bg-slate-950/50 border-t border-b border-slate-700/50 p-3 mb-2 rounded-xl">
-                    <div class="flex items-center justify-between mb-2">
-                        <span id="whisperTargetUi" class="text-[10px] font-black uppercase text-purple-400 tracking-widest">Message to User</span>
-                        <button onclick="closeWhisper()" class="text-slate-500 hover:text-red-400 transition-colors" title="Close">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
-                    </div>
-                    <div class="flex gap-2">
-                        <input id="whisperInput" type="text" placeholder="Whisper..." class="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-xs outline-none focus:border-purple-500/50 text-slate-200 transition-colors shadow-inner" onkeydown="if(event.key === 'Enter') sendWhisper()">
-                        <button onclick="sendWhisper()" class="bg-purple-600 hover:bg-purple-500 text-white rounded-lg p-2 font-bold transition-colors shadow-lg shadow-purple-900/40">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path fill-rule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="flex-1 flex flex-col min-h-[40%] border-t border-slate-700/50 pt-4">
-                    <h3 class="text-xs font-black text-purple-400 uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-slate-700/50 pb-2">
-                        <span class="w-2 h-2 rounded-full bg-purple-500"></span> System Updates
-                    </h3>
-                    <div id="updatesList" class="flex-1 overflow-y-auto space-y-3 dropdown-scroll pr-1">
-                        <!-- Logs injected here -->
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- LOGIN OVERLAY -->
-            <div id="loginOverlay" class="fixed inset-0 z-[200] flex hidden items-center justify-center bg-slate-950/80 backdrop-blur-md border border-slate-800 transition-opacity duration-500">
-                <div class="bg-slate-900/90 p-8 rounded-3xl border border-blue-900/50 shadow-[0_0_100px_rgba(0,0,0,0.8)] max-w-sm w-full transform transition-all text-center">
-                    <div class="flex justify-center mb-6">
-                        <div class="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-600/30">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        </div>
-                    </div>
-                    <h2 class="text-2xl font-black text-white mb-2 tracking-tighter uppercase">ZORG-Ω Access</h2>
-                    <p class="text-[10px] text-slate-400 font-bold tracking-widest uppercase mb-8">Identify yourself to proceed</p>
-                    
-                    <input id="loginName" type="text" placeholder="Designation (Your Name)" class="w-full p-4 rounded-xl bg-slate-950 border border-slate-700 outline-none text-center font-bold text-lg focus:border-blue-500 shadow-inner mb-6 transition-colors" autocomplete="off" onkeydown="if(event.key === 'Enter') handleLogin()">
-                    
-                    <button onclick="handleLogin()" class="w-full bg-blue-600 p-4 rounded-xl font-black text-sm hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/40 active:scale-95 tracking-widest uppercase mb-4">INITIALIZE</button>
-                </div>
-            </div>
-
-            <!-- CUSTOM MESSAGES / PROMPTS MODAL -->
-            <div id="customDialogModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[100] p-4">
-                <div class="bg-slate-900/95 backdrop-blur-2xl p-6 rounded-2xl border border-blue-500/50 shadow-[0_0_50px_rgba(0,0,0,0.8)] w-full max-w-sm transform transition-all">
-                    <h3 id="dialogTitle" class="text-xl font-black text-blue-400 mb-3 italic tracking-tighter uppercase">Notice</h3>
-                    <p id="dialogMessage" class="text-sm text-slate-300 mb-5 font-medium"></p>
-                    
-                    <input id="dialogInput" type="password" placeholder="Password..." class="hidden w-full p-3 mb-5 rounded-xl bg-slate-950 border border-slate-700 outline-none text-sm text-center font-mono focus:border-blue-500/50 transition-colors">
-                    
-                    <div class="flex gap-3 justify-end">
-                        <button id="dialogCancelBtn" class="px-5 py-2.5 rounded-xl bg-slate-800 text-slate-400 font-bold hover:bg-slate-700 hover:text-white transition-all text-sm hidden">Cancel</button>
-                        <button id="dialogConfirmBtn" class="px-5 py-2.5 rounded-xl bg-blue-600 text-white font-black hover:bg-blue-500 transition-all text-sm uppercase tracking-wider">OK</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TOAST CONTAINER -->
-            <div id="toastContainer" class="fixed bottom-6 right-6 z-[200] flex flex-col items-end gap-3 pointer-events-none"></div>
-
-            <!-- POST-EXECUTION DASHBOARD MODAL -->
-            <div id="successModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[150] p-4 backdrop-blur-sm">
-                <div class="bg-slate-900/90 backdrop-blur-2xl p-8 rounded-3xl border border-emerald-500/50 shadow-[0_0_80px_rgba(16,185,129,0.2)] w-full max-w-md transform transition-all text-center">
-                    <div class="mx-auto w-20 h-20 bg-emerald-900/50 rounded-full flex items-center justify-center mb-6 border border-emerald-500/30 shadow-inner">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </div>
-                    <h2 class="text-3xl font-black text-emerald-400 mb-2 italic tracking-tighter uppercase drop-shadow-md">Extraction Complete!</h2>
-                    <p id="successModalDesc" class="text-slate-300 font-medium mb-8 text-lg">0 Distinct Records Assembled. Exporting...</p>
-                    <button onclick="closeSuccessModal()" class="w-full bg-emerald-600 p-4 rounded-xl font-black text-lg text-white hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-900/20 active:scale-95 tracking-tight uppercase">Acknowledge</button>
-                </div>
-            </div>
-
-            <!-- UPLOAD / EDIT MODAL -->
-            <div id="uploadModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4">
-                <div class="bg-slate-900/90 backdrop-blur-2xl p-6 rounded-2xl border border-blue-900/80 shadow-[0_0_50px_rgba(0,0,0,0.7)] w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
-                    <button onclick="closeUploadModal()" class="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                    <h2 id="modalTitle" class="text-2xl font-black text-blue-400 mb-4 italic tracking-tighter uppercase">Register New Engine</h2>
-                    <div class="space-y-4">
-                        <div class="flex gap-4">
-                            <div class="flex-1">
-                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Engine ID (<span class="text-emerald-400">Re-use ID to Update</span>)</label>
-                                <input id="upId" type="text" placeholder="e.g. custom_bot" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm font-mono">
-                            </div>
-                            <div class="flex-1">
-                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Display Name</label>
-                                <input id="upName" type="text" placeholder="e.g. TradeShow Bot" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm">
-                            </div>
-                        </div>
-                        <div class="flex gap-4">
-                            <div class="flex-1">
-                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Category</label>
-                                <div class="relative">
-                                    <select id="upCategory" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm text-white focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all shadow-inner appearance-none cursor-pointer">
-                                        <option value="Custom" class="bg-slate-800 text-white">Custom</option>
-                                        <option value="General" class="bg-slate-800 text-white">General</option>
-                                    </select>
-                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="flex-1">
-                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Input Field Names (Comma Separated)</label>
-                                <input id="upInputType" type="text" placeholder="e.g. Target URL, Username, Password" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 block">Instructions String</label>
-                            <textarea id="upInst" placeholder="Instructions displayed when engine is selected... (Supports multiple lines)" class="w-full p-3 h-24 rounded-xl bg-slate-800 border border-slate-700 outline-none text-sm"></textarea>
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1 flex justify-between">
-                                <span>Engine Code (Node.js)</span>
-                                <span class="text-blue-500 font-normal normal-case italic">Follow EngineTemplate.md</span>
-                            </label>
-                            <textarea id="upCode" placeholder="module.exports = async function(params, emitLog) { ... };" class="w-full p-4 h-64 rounded-xl bg-slate-950 border border-slate-700 outline-none text-[11px] font-mono whitespace-pre text-green-400"></textarea>
-                        </div>
-                        <button onclick="submitUpload()" class="w-full bg-blue-600 p-4 rounded-xl font-black text-lg hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/20 active:scale-95 tracking-tight uppercase">Inject / Update Engine into Core</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="absolute bottom-4 left-6 text-slate-400/50 text-sm font-bold uppercase tracking-widest italic z-0 drop-shadow-lg">Powered by YahiaH</div>
-            <div class="bg-slate-900/85 backdrop-blur-xl p-8 rounded-2xl border border-slate-800/80 w-full max-w-xl shadow-[0_0_50px_rgba(0,0,0,0.5)] z-10">
-                <div class="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
-                    <div>
-                        <h1 class="text-4xl font-black text-blue-500 tracking-tighter italic">ZORG-Ω</h1>
-                        <p class="text-[10px] text-slate-500 font-mono uppercase">Architect v6.0 Modular | Standardizer Active</p>
-                        <p class="text-[9px] text-blue-500/50 font-mono tracking-widest mt-1">SYSTEM_CORES: [<span id="engineCountBadge">0</span>]</p>
-                    </div>
-                    <div id="counterArea" class="text-right hidden">
-                        <div id="loader" class="flex items-center space-x-1 mb-1">
-                            <span class="dot dot1"></span><span class="dot dot2"></span><span class="dot"></span>
-                        </div>
-                        <div id="completeText" class="hidden text-emerald-400 font-black text-xl italic uppercase tracking-tighter shadow-emerald-900/50 drop-shadow-md">Complete</div>
-                        <div id="errorText" class="hidden text-red-500 font-black text-xl italic uppercase tracking-tighter shadow-red-900/50 drop-shadow-md">Error</div>
-                    </div>
-                </div>
-
-                <div id="instructionPanel" class="mb-4 p-4 bg-slate-950/40 rounded-xl border border-blue-900/20">
-                    <h3 class="text-[10px] font-bold text-blue-400 uppercase mb-1 tracking-widest">Protocol</h3>
-                    <div id="instructionContent" class="text-[11px] text-slate-400 leading-relaxed italic whitespace-pre-wrap"></div>
-                </div>
-
-                <div class="space-y-4">
-                    
-                    <div class="flex gap-3 items-center relative">
-                        <input type="hidden" id="mode" value="marketplace">
-                        
-                        <!-- CUSTOM DROPDOWN BUTTON -->
-                        <div class="flex-1 relative">
-                            <button id="dropdownBtn" onclick="toggleDropdownMenu()" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 text-blue-400 font-bold text-left flex justify-between items-center hover:bg-slate-700/50 transition-colors shadow-inner relative z-30">
-                                <span id="dropdownBtnText">Map-Dynamics (Marketplace)</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
-                            </button>
-                            
-                            <!-- DROPDOWN MENU PANEL -->
-                            <div id="dropdownMenu" class="hidden absolute top-full left-0 w-full mt-2 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-40 overflow-hidden flex flex-col max-h-[24rem]">
-                                <!-- SEARCH BAR WITHIN DROPDOWN -->
-                                <div class="p-3 border-b border-slate-700/50 bg-slate-800/80 sticky top-0 z-10 hidden" id="searchContainer">
-                                    <div class="relative">
-                                        <input type="text" id="engineSearchInput" onkeyup="filterEngines()" placeholder="Search engines..." class="w-full p-2 pl-9 bg-slate-900/50 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50 transition-colors">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 absolute left-3 top-2.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                    </div>
-                                </div>
-                                <div class="overflow-y-auto dropdown-scroll flex-1">
-                                    ${customDropdownHtml}
-                                </div>
-                                <div id="noResults" class="hidden text-center p-4 text-slate-500 text-sm font-mono italic">No engines found</div>
-                            </div>
-                        </div>
-                        
-                        <!-- SEARCH TOGGLE BUTTON -->
-                        <div class="flex items-center gap-2">
-                            <button onclick="toggleSearch()" class="w-12 h-12 bg-slate-800 text-slate-400 rounded-xl hover:bg-slate-700 hover:text-blue-400 transition-all border border-slate-700 hover:border-slate-500/50 flex items-center justify-center shrink-0 shadow-lg shadow-black/40 z-20" title="Search Engines">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                            </button>
-                        </div>
-                        
-                        <!-- SLEEK + UPLOAD BUTTON -->
-                        <button onclick="openUploadModal()" class="w-12 h-12 bg-slate-800 text-blue-500 rounded-xl hover:bg-slate-700 hover:text-blue-400 transition-all border border-slate-700 hover:border-blue-500/50 flex items-center justify-center shrink-0 shadow-lg shadow-black/40 z-20" title="Upload Custom Script">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-                        </button>
-                    </div>
-
-                    <div id="standardBox" class="hidden"><input id="url" type="text" placeholder="Domain (e.g. www.wire.de)" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none"></div>
-                    <div id="curlBox" class="hidden"><textarea id="curl" placeholder="Paste cURL Command here..." class="w-full p-4 h-24 rounded-xl bg-slate-800 border border-slate-700 outline-none text-xs font-mono"></textarea></div>
-                    <div id="eshowBox" class="hidden"><input id="token" type="text" placeholder="Bearer Token" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none"></div>
-                    <div id="cadBox" class="hidden space-y-3">
-                        <input id="cadEventId" type="text" placeholder="Event ID" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">
-                        <input id="cadClientId" type="text" placeholder="Client ID" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700">
-                        <input id="cadEventKey" type="text" placeholder="Event Key" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700">
-                    </div>
-                    <div id="marketBox" class="space-y-3">
-                        <input id="dynamicShowId" type="text" placeholder="Show ID" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">
-                        <input id="cookie" type="text" placeholder="PHPSESSID Cookie" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">
-                    </div>
-                    <div id="customInputBox" class="hidden space-y-3"></div>
-
-                    <input id="file" type="text" placeholder="Output Filename (Optional) - Defaults to Show URL/ID" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">
-                    
-                    <div class="flex gap-3 relative">
-                        <button id="btn" onclick="run()" class="w-full bg-blue-600 p-5 rounded-xl font-black text-xl hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/20 active:scale-95 tracking-tight">EXECUTE ARCHITECT</button>
-
-                        <button id="stopBtn" onclick="stopRun()" class="w-20 bg-slate-800 text-red-500 border border-slate-700 hover:border-red-500/50 hover:bg-slate-700 transition-all rounded-xl focus:outline-none flex items-center justify-center shrink-0 shadow-lg shadow-black/40 pointer-events-none opacity-50" title="Emergency Stop">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg>
-                        </button>
-                        
-                        <button id="clearInputsBtn" onclick="clearInputs()" class="w-16 bg-slate-800 text-slate-400 border border-slate-700 hover:border-slate-500 hover:text-white hover:bg-slate-700 transition-all rounded-xl focus:outline-none flex items-center justify-center shrink-0 shadow-lg shadow-black/40" title="Clear All Inputs">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        </button>
-                    </div>
-                    
-                    <div id="telemetryBox" class="hidden mt-4 relative group">
-                        <div class="flex justify-between items-end mb-1 pl-1 pr-1">
-                            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Live Telemetry</p>
-                            <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-3 text-[9px] font-bold uppercase tracking-widest">
-                                <button onclick="copyTelemetry()" class="text-slate-400 hover:text-blue-400 transition-colors flex items-center gap-1">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg> Copy All
-                                </button>
-                                <button onclick="clearTelemetry()" class="text-slate-400 hover:text-red-400 transition-colors flex items-center gap-1">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg> Clear
-                                </button>
-                                <button id="pauseTelemetryBtn" onclick="toggleTelemetryScroll()" class="text-slate-400 hover:text-yellow-400 transition-colors flex items-center gap-1">
-                                    <svg id="pauseIcon" xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> <span id="pauseText">Pause</span>
-                                </button>
-                            </div>
-                        </div>
-                        <div id="telemetry" class="bg-black border border-slate-700 rounded-xl p-3 h-40 overflow-y-auto font-mono text-[10px] text-green-400 shadow-inner break-words"></div>
-                    </div>
-                </div>
-                
-                <div class="mt-8 flex justify-center items-center gap-6">
-                    <!-- TEST MODE TEXT TOGGLE -->
-                    <label class="cursor-pointer group flex items-center gap-2" title="Test Mode (Max 5 items extracted)">
-                        <input type="checkbox" id="testModeToggle" class="sr-only peer">
-                        <div class="w-2.5 h-2.5 rounded-full bg-slate-700 peer-checked:bg-purple-500 transition-colors"></div>
-                        <span class="text-slate-600 hover:text-purple-400 text-[10px] font-bold transition-colors select-none peer-checked:text-purple-400">TEST MODE</span>
-                    </label>
-                
-                    <button onclick="shutdown()" class="text-slate-600 hover:text-red-500 text-[10px] font-bold transition-colors">TERMINATE SESSION</button>
-                </div>
-            </div>
-
-            <script>
-                // -- DROPDOWN LOGIC --
-                let searchActive = false;
-                
-                function toggleSearch() {
-                    searchActive = !searchActive;
-                    const searchContainer = document.getElementById('searchContainer');
-                    const dropdownMenu = document.getElementById('dropdownMenu');
-                    const searchInput = document.getElementById('engineSearchInput');
-                    
-                    if (searchActive) {
-                        searchContainer.classList.remove('hidden');
-                        dropdownMenu.classList.remove('hidden');
-                        searchInput.focus();
-                    } else {
-                        searchContainer.classList.add('hidden');
-                        searchInput.value = '';
-                        filterEngines(); // reset filter
-                    }
-                }
-                
-                // -- CUSTOM DIALOG LOGIC --
-                function showToast(message, type = 'success', onClickAction = '') {
-                    return new Promise(resolve => {
-                        const container = document.getElementById('toastContainer');
-                        const toast = document.createElement('div');
-                        
-                        let bgClass = '';
-                        let iconClass = '';
-                        let titleStr = '';
-                        let iconSvg = '';
-
-                        if (type === 'success') {
-                            bgClass = 'bg-emerald-900/95 border-emerald-500/50 shadow-emerald-900/50';
-                            iconClass = 'text-emerald-400';
-                            titleStr = 'SUCCESS';
-                            iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>';
-                        } else if (type === 'error') {
-                            bgClass = 'bg-red-900/95 border-red-500/50 shadow-red-900/50';
-                            iconClass = 'text-red-400';
-                            titleStr = 'ERROR';
-                            iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>';
-                        } else if (type === 'whisper') {
-                            bgClass = 'bg-purple-900/95 border-purple-500/50 shadow-purple-900/50 hover:bg-purple-800/95 cursor-pointer';
-                            iconClass = 'text-purple-400';
-                            titleStr = 'TRANSMISSION';
-                            iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z" clip-rule="evenodd" /></svg>';
-                        }
-
-                        toast.className = 'transform transition-all duration-300 translate-x-12 opacity-0 flex items-start gap-4 p-4 rounded-xl border shadow-2xl backdrop-blur-xl w-80 pointer-events-auto ' + bgClass;
-                        if (onClickAction) toast.setAttribute('onclick', onClickAction);
-                        toast.innerHTML = 
-                            '<div class="shrink-0 ' + iconClass + ' mt-0.5">' + iconSvg + '</div>' +
-                            '<div class="flex-1">' +
-                                '<h4 class="' + iconClass + ' font-black text-xs uppercase tracking-widest mb-1 italic">' + titleStr + '</h4>' +
-                                '<p class="text-slate-200 text-sm font-medium">' + message + '</p>' +
-                            '</div>';
-                        
-                        container.appendChild(toast);
-                        
-                        requestAnimationFrame(() => {
-                            toast.classList.remove('translate-x-12', 'opacity-0');
-                        });
-                        
-                        setTimeout(() => {
-                            toast.classList.add('translate-x-12', 'opacity-0');
-                            setTimeout(() => {
-                                toast.remove();
-                                resolve();
-                            }, 300);
-                        }, 4000);
-                    });
-                }
-                
-                function customConfirm(message, title = "Confirm Action") {
-                    return new Promise(resolve => {
-                        const modal = document.getElementById('customDialogModal');
-                        document.getElementById('dialogTitle').innerText = title;
-                        document.getElementById('dialogTitle').className = "text-xl font-black text-yellow-500 mb-3 italic tracking-tighter uppercase";
-                        document.getElementById('dialogMessage').innerText = message;
-                        document.getElementById('dialogInput').classList.add('hidden');
-                        
-                        const cancelBtn = document.getElementById('dialogCancelBtn');
-                        cancelBtn.classList.remove('hidden');
-                        
-                        const confirmBtn = document.getElementById('dialogConfirmBtn');
-                        confirmBtn.className = "px-5 py-2.5 rounded-xl bg-red-600 text-white font-black hover:bg-red-500 transition-all text-sm uppercase tracking-wider shadow-lg shadow-red-900/20";
-                        confirmBtn.innerText = "Proceed";
-                        
-                        const handleConfirm = () => { cleanup(); resolve(true); };
-                        const handleCancel = () => { cleanup(); resolve(false); };
-                        
-                        const cleanup = () => {
-                            modal.classList.replace('flex', 'hidden');
-                            confirmBtn.removeEventListener('click', handleConfirm);
-                            cancelBtn.removeEventListener('click', handleCancel);
-                        };
-                        
-                        confirmBtn.addEventListener('click', handleConfirm);
-                        cancelBtn.addEventListener('click', handleCancel);
-                        modal.classList.replace('hidden', 'flex');
-                    });
-                }
-                
-                function customPrompt(message, title = "Authentication Required") {
-                    return new Promise(resolve => {
-                        const modal = document.getElementById('customDialogModal');
-                        document.getElementById('dialogTitle').innerText = title;
-                        document.getElementById('dialogTitle').className = "text-xl font-black text-purple-500 mb-3 italic tracking-tighter uppercase";
-                        document.getElementById('dialogMessage').innerText = message;
-                        
-                        const input = document.getElementById('dialogInput');
-                        input.value = '';
-                        input.classList.remove('hidden');
-                        
-                        const cancelBtn = document.getElementById('dialogCancelBtn');
-                        cancelBtn.classList.remove('hidden');
-                        
-                        const confirmBtn = document.getElementById('dialogConfirmBtn');
-                        confirmBtn.className = "px-5 py-2.5 rounded-xl bg-purple-600 text-white font-black hover:bg-purple-500 transition-all text-sm uppercase tracking-wider shadow-lg shadow-purple-900/20";
-                        confirmBtn.innerText = "Submit";
-                        
-                        const handleConfirm = () => { cleanup(); resolve(input.value); };
-                        const handleCancel = () => { cleanup(); resolve(null); };
-                        const handleEnter = (e) => { if(e.key === 'Enter') handleConfirm(); };
-                        
-                        const cleanup = () => {
-                            modal.classList.replace('flex', 'hidden');
-                            confirmBtn.removeEventListener('click', handleConfirm);
-                            cancelBtn.removeEventListener('click', handleCancel);
-                            input.removeEventListener('keypress', handleEnter);
-                        };
-                        
-                        confirmBtn.addEventListener('click', handleConfirm);
-                        cancelBtn.addEventListener('click', handleCancel);
-                        input.addEventListener('keypress', handleEnter);
-                        
-                        modal.classList.replace('hidden', 'flex');
-                        setTimeout(() => input.focus(), 50);
-                    });
-                }
-
-                function filterEngines() {
-                    const term = document.getElementById('engineSearchInput').value.toLowerCase();
-                    const items = document.querySelectorAll('.engine-item');
-                    let anyVisible = false;
-                    
-                    if (term === '') {
-                        // Reset everything back to visible
-                        items.forEach(item => item.style.display = 'flex');
-                        const categories = document.querySelectorAll('.border-b.border-slate-700\\/50');
-                        categories.forEach(cat => {
-                            if (cat === document.getElementById('searchContainer').parentElement) return; 
-                            cat.style.display = 'block';
-                        });
-                        document.getElementById('noResults').classList.add('hidden');
-                        return;
-                    }
-                    
-                    items.forEach(item => {
-                        const name = item.getAttribute('data-engine-name');
-                        if (name.includes(term)) {
-                            item.style.display = 'flex';
-                            anyVisible = true;
-                            // Ensure parent category is visible if it matches
-                            const parentCat = item.closest('.bg-slate-900\\/50');
-                            if (term !== '' && parentCat) {
-                                parentCat.classList.remove('hidden');
-                                const headerId = parentCat.id.replace('cat-', 'icon-');
-                                document.getElementById(headerId).classList.add('rotate-180');
-                            }
-                        } else {
-                            item.style.display = 'none';
-                        }
-                    });
-                    
-                    // Toggle No Results
-                    document.getElementById('noResults').classList.toggle('hidden', !!anyVisible || items.length === 0);
-                    
-                    // Toggle categories if empty
-                    const categories = document.querySelectorAll('.border-b.border-slate-700\\/50');
-                    categories.forEach(cat => {
-                        if (cat === document.getElementById('searchContainer').parentElement) return; // skip search barrier
-                        const visibleItems = cat.querySelectorAll('.engine-item[style="display: flex;"], .engine-item:not([style="display: none;"])');
-                        cat.style.display = visibleItems.length > 0 ? 'block' : 'none';
-                    });
-                }
-                
-                function toggleDropdownMenu() {
-                    document.getElementById('dropdownMenu').classList.toggle('hidden');
-                    if(searchActive) setTimeout(() => document.getElementById('engineSearchInput').focus(), 50);
-                }
-                
-                function toggleCategory(cat) {
-                    const catDiv = document.getElementById('cat-' + cat);
-                    const iconDiv = document.getElementById('icon-' + cat);
-                    if (catDiv.classList.contains('hidden')) {
-                        catDiv.classList.remove('hidden');
-                        iconDiv.classList.add('rotate-180');
-                    } else {
-                        catDiv.classList.add('hidden');
-                        iconDiv.classList.remove('rotate-180');
-                    }
-                }
-
-                function selectEngine(id, name) {
-                    document.getElementById('mode').value = id;
-                    document.getElementById('dropdownBtnText').innerText = name;
-                    document.getElementById('dropdownMenu').classList.add('hidden');
-                    toggle(); 
-                }
-                
-                document.addEventListener('click', function(event) {
-                    const dropdownBtn = document.getElementById('dropdownBtn');
-                    const dropdownMenu = document.getElementById('dropdownMenu');
-                    const searchBtn = document.querySelector('button[title="Search Engines"]');
-                    const uploadModal = document.getElementById('uploadModal');
-                    
-                    if (!dropdownBtn.contains(event.target) && !dropdownMenu.contains(event.target) && (!searchBtn || !searchBtn.contains(event.target))) {
-                        dropdownMenu.classList.add('hidden');
-                        if(searchActive) { /* optional: close search on click outside */ }
-                    }
-                });
-
-                // -- EXISTING LOGIC --
-                const inst = {
-                    marketplace: "Provide the Show ID and your PHPSESSID cookie. Uses Deep Recovery for contact names.",
-                    dusseldorf: "Provide the base domain. Targets /vis-api/ search.",
-                    algolia: "Paste the Algolia API cURL command (Copy as cURL bash) from your network tab.",
-                    informa: "Paste the Informa API cURL command (Copy as cURL bash) from your network tab.",
-                    eshow: "Copy the Bearer Token from floor_space.cfc headers.",
-                    cadmium: "Extract Event ID, Client ID, and Event Key from CreateRentedBoothList.asp."
-                };
-                ${customInstStr}
-
-                function toggle() {
-                    const m = document.getElementById('mode').value;
-                    document.getElementById('instructionContent').innerText = inst[m] || "No instructions provided.";
-                    
-                    document.getElementById('marketBox').classList.toggle('hidden', m !== 'marketplace');
-                    document.getElementById('standardBox').classList.toggle('hidden', !['dusseldorf'].includes(m));
-                    document.getElementById('curlBox').classList.toggle('hidden', !['algolia', 'informa'].includes(m));
-                    document.getElementById('eshowBox').classList.toggle('hidden', m !== 'eshow');
-                    document.getElementById('cadBox').classList.toggle('hidden', m !== 'cadmium');
-                    document.getElementById('customInputBox').classList.add('hidden');
-
-                    if(m === 'algolia') document.getElementById('curl').placeholder = "Paste Algolia API cURL here...";
-                    if(m === 'informa') document.getElementById('curl').placeholder = "Paste Informa API cURL here...";
-
-                    ${customToggleStr}
-                    if (typeof syncEngineUI === 'function') syncEngineUI();
-                }
-
-                // --- MODAL / EDIT FUNCTIONS ---
-                function openUploadModal() { 
-                    document.getElementById('modalTitle').innerText = "Register New Engine";
-                    document.getElementById('upId').value = "";
-                    document.getElementById('upId').readOnly = false; // allow editing new IDs
-                    document.getElementById('upName').value = "";
-                    document.getElementById('upCategory').value = "";
-                    document.getElementById('upInputType').value = "";
-                    document.getElementById('upInst').value = "";
-                    document.getElementById('upCode').value = "";
-                    
-                    document.getElementById('uploadModal').classList.replace('hidden', 'flex'); 
-                }
-                
-                function closeUploadModal() { 
-                    document.getElementById('uploadModal').classList.replace('flex', 'hidden'); 
-                }
-
-                function showSuccessModal(count) {
-                    const formattedCount = parseInt(count || 0).toLocaleString();
-                    document.getElementById('successModalDesc').innerText = formattedCount + ' Distinct Records Assembled. Exporting...';
-                    document.getElementById('successModal').classList.replace('hidden', 'flex');
-                }
-                
-                function closeSuccessModal() {
-                    document.getElementById('successModal').classList.replace('flex', 'hidden');
-                }
-                
-                async function editEngine(e, id) {
-                    e.stopPropagation(); // Prevent dropdown from closing / selecting
-                    
-                    const pwd = await customPrompt("Verify administrative permission to modify existing framework parameters.", "Security Check");
-                    if (pwd !== "1532") {
-                        if (pwd !== null) showToast("Invalid credentials supplied. Access denied.", "error");
-                        return;
-                    }
-                    
-                    try {
-                        const res = await fetch('/engine/' + id);
-                        if (!res.ok) throw new Error("Could not fetch engine data.");
-                        const data = await res.json();
-                        
-                        document.getElementById('modalTitle').innerText = "Edit Engine: " + id;
-                        document.getElementById('upId').value = data.id;
-                        document.getElementById('upId').readOnly = true; // prevent changing ID of existing engine
-                        document.getElementById('upName').value = data.name;
-                        document.getElementById('upCategory').value = data.category || "Custom";
-                        document.getElementById('upInputType').value = data.inputType !== undefined ? data.inputType : "Custom Input";
-                        document.getElementById('upInst').value = data.instruction || "";
-                        document.getElementById('upCode').value = data.code;
-                        
-                        document.getElementById('uploadModal').classList.replace('hidden', 'flex'); 
-                        document.getElementById('dropdownMenu').classList.add('hidden');
-                    } catch (err) {
-                        showToast(err.message, "error");
-                    }
-                }
-
-                async function deleteEngine(e, id) {
-                    e.stopPropagation();
-                    const pwd = await customPrompt("Verify administrative permission to obliterate engine: " + id, "Security Check");
-                    if (pwd !== "1532") {
-                        if (pwd !== null) showToast("Invalid credentials supplied. Access denied.", "error");
-                        return;
-                    }
-                    
-                    const isConfirmed = await customConfirm("Are you sure you want to delete engine '" + id + "'? This action is permanent and cannot be undone.", "Confirm Deletion");
-                    if (isConfirmed) {
-                        try {
-                            const res = await fetch('/delete-engine/' + id, { method: 'DELETE' });
-                            const data = await res.json();
-                            if(!res.ok) throw new Error(data.error || "Failed to delete.");
-                            showToast(data.message, "success");
-                            setTimeout(() => window.location.reload(), 800);
-                        } catch (err) {
-                            showToast("Error: " + err.message, "error");
-                        }
-                    }
-                }
-
-                async function submitUpload() {
-                    const payload = {
-                        id: document.getElementById('upId').value,
-                        name: document.getElementById('upName').value,
-                        category: document.getElementById('upCategory').value,
-                        inputType: document.getElementById('upInputType').value,
-                        instruction: document.getElementById('upInst').value,
-                        code: document.getElementById('upCode').value
-                    };
-                    if(!payload.id || !payload.name || !payload.code) {
-                        showToast("ID, Name, and Code fields are strictly required prior to injection.", "error");
-                        return;
-                    }
-                    
-                    try {
-                        const res = await fetch('/upload-engine', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify(payload)
-                        });
-                        const data = await res.json();
-                        if(!res.ok) throw new Error(data.error);
-                        
-                        closeUploadModal();
-                        showToast(data.message, "success");
-                        setTimeout(() => window.location.reload(), 800);
-                    } catch (e) {
-                        showToast("Error: " + e.message, "error");
-                    }
-                }
-
-                // --- USER PROFILE & LOGIN LOGIC ---
-                let zUsername = '';
-                let zScrapeCount = 0;
-
-                function initProfile() {
-                    const storedDate = localStorage.getItem('zorg_last_scrape_date');
-                    const storedCount = localStorage.getItem('zorg_scrape_count');
-                    const today = new Date().toDateString();
-                    
-                    if (storedDate !== today) {
-                        zScrapeCount = 0;
-                        localStorage.setItem('zorg_last_scrape_date', today);
-                        localStorage.setItem('zorg_scrape_count', '0');
-                    } else {
-                        zScrapeCount = parseInt(storedCount) || 0;
-                    }
-                    
-                    document.getElementById('scrapeCount').innerText = zScrapeCount;
-                }
-                function handleLogin() {
-                    const nameInput = document.getElementById('loginName').value.trim();
-                    if (!nameInput) {
-                        showToast("Designation required.", "error");
-                        return;
-                    }
-                    
-                    zUsername = nameInput;
-                    requestNotificationPermission();
-                    if (window.zorgSocket) window.zorgSocket.emit('register-name', nameInput);
-                    
-                    document.getElementById('loginOverlay').classList.add('opacity-0');
-                    setTimeout(() => {
-                        document.getElementById('loginOverlay').classList.add('hidden');
-                        updateProfileUI();
-                        showToast(\`Welcome to the network, Agent \${zUsername}.\`, "success");
-                    }, 500);
-                }
-
-                function updateProfileUI() {
-                    document.getElementById('userProfile').classList.remove('hidden');
-                    document.getElementById('profileName').innerHTML = \`Hi, \${zUsername}! <span class="text-[0.6rem] ml-1">🟢</span>\`;
-                    document.getElementById('scrapeCount').innerText = zScrapeCount;
-                }
-
-                function incrementScrapeCount() {
-                    zScrapeCount++;
-                    document.getElementById('scrapeCount').innerText = zScrapeCount;
-                    localStorage.setItem('zorg_scrape_count', zScrapeCount.toString());
-                }
-
-                // Initialize on load
-                initProfile();
-
-                let logInterval;
-                let abortController;
-                let autoScrollTelemetry = true;
-
-                function copyTelemetry() {
-                    const text = document.getElementById('telemetry').innerText;
-                    navigator.clipboard.writeText(text).then(() => showToast("Telemetry copied to clipboard.", "success"));
-                }
-                
-                function clearTelemetry() {
-                    document.getElementById('telemetry').innerHTML = '';
-                    showToast("Telemetry cleared.", "success");
-                }
-                
-                function toggleTelemetryScroll() {
-                    autoScrollTelemetry = !autoScrollTelemetry;
-                    const btnSpan = document.getElementById('pauseText');
-                    const icon = document.getElementById('pauseIcon');
-                    if(autoScrollTelemetry) {
-                        btnSpan.innerText = 'Pause';
-                        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />';
-                        document.getElementById('telemetry').scrollTop = document.getElementById('telemetry').scrollHeight;
-                    } else {
-                        btnSpan.innerText = 'Resume';
-                        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />';
-                    }
-                }
-
-                function stopRun() {
-                    if (abortController) abortController.abort();
-                    clearInterval(logInterval);
-                    document.getElementById('telemetry').innerHTML += '<br><span style="color:red;">> [ERROR] OPERATION ABORTED BY USER (Client Side Halt)</span>';
-                    document.getElementById('loader').classList.add('hidden');
-                    document.getElementById('errorText').classList.remove('hidden');
-                    document.getElementById('btn').disabled = false;
-                    
-                    const stopBtn = document.getElementById('stopBtn');
-                    stopBtn.classList.add('pointer-events-none', 'opacity-50');
-                    stopBtn.classList.remove('bg-red-600/20', 'border-red-500');
-                }
-
-                function clearInputs() {
-                    const idsToClear = ['url', 'curl', 'token', 'cadEventId', 'cadClientId', 'cadEventKey', 'dynamicShowId', 'cookie', 'file'];
-                    idsToClear.forEach(id => {
-                        const el = document.getElementById(id);
-                        if (el) el.value = '';
-                    });
-                    document.querySelectorAll('.custom-dynamic-input').forEach(el => el.value = '');
-                    showToast("Input fields cleared.", "success");
-                }
-
-                async function run() {
-                    const btn = document.getElementById('btn');
-                    const stopBtn = document.getElementById('stopBtn');
-                    const counterArea = document.getElementById('counterArea');
-                    const loader = document.getElementById('loader');
-                    const completeText = document.getElementById('completeText');
-                    const errorText = document.getElementById('errorText');
-                    const telemetryBox = document.getElementById('telemetryBox');
-                    const telemetry = document.getElementById('telemetry');
-
-                    btn.disabled = true;
-                    stopBtn.classList.remove('pointer-events-none', 'opacity-50');
-                    stopBtn.classList.add('bg-red-600/20', 'border-red-500');
-                    
-                    counterArea.classList.remove('hidden');
-                    loader.classList.remove('hidden');
-                    completeText.classList.add('hidden');
-                    errorText.classList.add('hidden');
-                    
-                    telemetryBox.classList.remove('hidden');
-                    telemetry.innerHTML = '';
-
-                    logInterval = setInterval(async () => {
-                        try {
-                            const res = await fetch('/logs');
-                            const data = await res.json();
-                            if (data.logs.length > 0) {
-                                telemetry.innerHTML = data.logs.join('<br>');
-                                if (autoScrollTelemetry) {
-                                    telemetry.scrollTop = telemetry.scrollHeight;
-                                }
-                            }
-                        } catch(e) {}
-                    }, 800);
-
-                    try {
-                        abortController = new AbortController();
-                        const response = await fetch('/run', {
-                            method: 'POST',
-                            signal: abortController.signal,
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({
-                                mode: document.getElementById('mode').value,
-                                domain: document.getElementById('url').value,
-                                curlCommand: document.getElementById('curl').value,
-                                token: document.getElementById('token').value,
-                                cadEventId: document.getElementById('cadEventId').value,
-                                cadClientId: document.getElementById('cadClientId').value,
-                                cadEventKey: document.getElementById('cadEventKey').value,
-                                dynamicShowId: document.getElementById('dynamicShowId').value,
-                                cookie: document.getElementById('cookie').value,
-                                customInput: Array.from(document.querySelectorAll('.custom-dynamic-input')).map(el => el.value)[0] || '',
-                                customInputs: Array.from(document.querySelectorAll('.custom-dynamic-input')).map(el => el.value),
-                                fileName: document.getElementById('file').value,
-                                testMode: document.getElementById('testModeToggle').checked
-                            })
-                        });
-                        
-                        if (!response.ok) {
-                            const errData = await response.json();
-                            throw new Error(errData.error || 'Crawl Failed.');
-                        }
-                        
-                        const recordCount = response.headers.get('X-Record-Count') || 0;
-                        const blob = await response.blob();
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = (document.getElementById('file').value || 'Scrape') + '.xlsx'; 
-                        a.click();
-                        
-                        loader.classList.add('hidden');
-                        completeText.classList.remove('hidden');
-                        // showSuccessModal(recordCount); // Disabled as per user request
-                        incrementScrapeCount();
-                    } catch (err) {
-                        if (err.name === 'AbortError') return;
-                        loader.classList.add('hidden');
-                        errorText.classList.remove('hidden');
-                        telemetry.innerHTML += '<br><span style="color:red;">> [ERROR] ' + err.message + '</span>';
-                        telemetry.scrollTop = telemetry.scrollHeight;
-                    } finally { 
-                        btn.disabled = false;
-                        stopBtn.classList.add('pointer-events-none', 'opacity-50');
-                        stopBtn.classList.remove('bg-red-600/20', 'border-red-500');
-                        setTimeout(() => clearInterval(logInterval), 1500);
-                    }
-                }
-                
-                async function shutdown() { 
-                    const isConfirmed = await customConfirm("Are you certain you wish to terminate the ZORG-Ω instance?", "System Shutdown");
-                    if(isConfirmed) { 
-                        await fetch('/shutdown', {method:'POST'}); 
-                        document.body.innerHTML = '<div style="display:flex; height:100vh; align-items:center; justify-content:center; font-weight:bold; font-size:24px; color:#fff;">OFFLINE</div>'; 
-                    } 
-                }
-                
-                toggle();
-
-                // --- SOCKET.IO CLIENT LOGIC ---
-                window.zorgSocket = io();
-                
-                window.zorgSocket.on('connect', () => {
-                    console.log('Connected to ZORG-Ω Network.');
-                });
-
-                window.zorgSocket.on('request-name', () => {
-                    document.getElementById('loginOverlay').classList.remove('hidden');
-                    setTimeout(() => {
-                        document.getElementById('loginOverlay').classList.remove('opacity-0');
-                        document.getElementById('loginName').focus();
-                    }, 50);
-                });
-
-                function requestNotificationPermission() {
-                    if ("Notification" in window) {
-                        if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-                            Notification.requestPermission();
-                        }
-                    }
-                }
-
-                let currentOnlineUsers = [];
-                let activeEnginesMap = {};
-                let isManualAway = false;
-
-                function toggleStatusManual() {
-                    isManualAway = !isManualAway;
-                    const newStatus = isManualAway ? 'away' : 'online';
-                    window.zorgSocket.emit('update-presence', newStatus);
-                }
-
-                document.addEventListener('visibilitychange', () => {
-                    if (isManualAway) return;
-                    
-                    if (document.visibilityState === 'hidden') {
-                        window.zorgSocket.emit('update-presence', 'away');
-                    } else if (document.visibilityState === 'visible') {
-                        window.zorgSocket.emit('update-presence', 'online');
-                    }
-                });
-
-                function renderOnlineUsers() {
-                    const listEl = document.getElementById('onlineList');
-                    if (!listEl) return;
-                    listEl.innerHTML = Object.values(currentOnlineUsers).map(u => {
-                        const isMe = u.id === window.zorgSocket.id;
-                        const initial = (u.name || "?").charAt(0).toUpperCase();
-
-                        let engStatusText = '🟢 Online';
-                        let engStatusColor = 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)] animate-pulse';
-
-                        if (u.status === 'away') {
-                            engStatusText = '🌙 Away';
-                            engStatusColor = 'bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.8)]';
-                        }
-                        
-                        const engEntry = Object.values(activeEnginesMap).find(e => e.socketId === u.id);
-                        if (engEntry) {
-                            engStatusText = '🛠️ Using ' + (engEntry.engineName || engEntry.mode);
-                            engStatusColor = 'bg-orange-500 shadow-[0_0_5px_rgba(249,115,22,0.8)] animate-pulse';
-                        }
-
-                        let dotHtml = '<div class="w-2 h-2 rounded-full ' + engStatusColor + ' shrink-0"></div>';
-                        if (isMe) {
-                            dotHtml = '<button onclick="toggleStatusManual()" class="w-4 h-4 flex items-center justify-center rounded-full hover:scale-125 transition-transform shrink-0" title="Click to manually toggle Away/Online"><div class="w-2 h-2 rounded-full ' + engStatusColor + ' pointer-events-none"></div></button>';
-                        }
-
-                        let clickHandler = '';
-                        if (!isMe) {
-                            const safeName = (u.name || "?").replace(/'/g, "\\'");
-                            clickHandler = 'onclick="setChatTarget(\\\'' + u.id + '\\\', \\\'' + safeName + '\\\')" class="cursor-pointer flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner"';
-                        } else {
-                            clickHandler = 'class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner border-blue-500/30 bg-blue-900/10"';
-                        }
-
-                        return \`
-                            <div id="user-card-\${u.id}" \${clickHandler}>
-                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center border border-blue-500/30 shrink-0 shadow-lg shadow-black/20">
-                                    <span class="text-xs font-black text-blue-400">\${initial}</span>
-                                </div>
-                                <div class="flex-1 overflow-hidden pointer-events-none">
-                                    <div class="text-[11px] font-bold truncate \${isMe ? 'text-blue-400' : 'text-slate-200'}">\${u.name} \${isMe ? '<span class="text-[9px] text-slate-500 font-mono ml-1">(You)</span>' : ''}</div>
-                                    <div class="text-[9px] font-mono text-slate-400 font-bold truncate">\${engStatusText}</div>
-                                </div>
-                                \${dotHtml}
-                            </div>
-                        \`;
-                    }).join('');
-                }
-                
-                let activeWhisperTargetId = null;
-
-                window.setChatTarget = function(id, name) {
-                    activeWhisperTargetId = id;
-                    document.getElementById('whisperTargetUi').innerText = 'Messaging: ' + name;
-                    
-                    const whisperBox = document.getElementById('whisperBox');
-                    whisperBox.classList.replace('hidden', 'flex');
-                    
-                    setTimeout(() => {
-                        const sidebar = document.getElementById('onlineSidebar');
-                        const input = document.getElementById('whisperInput');
-                        
-                        input.focus();
-                        if (sidebar) sidebar.scrollTop = sidebar.scrollHeight;
-                    }, 50);
-                };
-
-                function closeWhisper() {
-                    activeWhisperTargetId = null;
-                    document.getElementById('whisperBox').classList.replace('flex', 'hidden');
-                    document.getElementById('whisperInput').value = '';
-                }
-
-                function sendWhisper() {
-                    if (!activeWhisperTargetId) return;
-                    const input = document.getElementById('whisperInput');
-                    const msg = input.value.trim();
-                    if (!msg) return;
-                    
-                    window.zorgSocket.emit('send-private-msg', { targetId: activeWhisperTargetId, message: msg });
-                    
-                    showToast(\`<span class="text-slate-400 text-[10px] block">To \${document.getElementById('whisperTargetUi').innerText.replace('Message Context: ', '')}:</span> \${msg}\`, 'success');
-                    input.value = '';
-                }
-
-                window.zorgSocket.on('receive-private-msg', (data) => {
-                    // Play subtle ZORG beep using AudioContext (safe, no external file needed)
-                    try {
-                        const AudioContextConfig = window.AudioContext || window.webkitAudioContext;
-                        if(AudioContextConfig) {
-                            const ctx = new AudioContextConfig();
-                            const osc = ctx.createOscillator();
-                            const gainNode = ctx.createGain();
-                            osc.connect(gainNode);
-                            gainNode.connect(ctx.destination);
-                            osc.type = 'sine';
-                            osc.frequency.setValueAtTime(800, ctx.currentTime);
-                            osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
-                            gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
-                            gainNode.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
-                            osc.start();
-                            osc.stop(ctx.currentTime + 0.5);
-                        }
-                    } catch(e) {}
-                    
-                    const safeName = data.from.replace(/'/g, "\\'");
-                    const msgHtml = \`<span class="text-slate-400 text-[10px] block mb-1">From \${data.from}: <i class="text-slate-500 lowercase">(Click to reply)</i></span> \${data.message}\`;
-                    showToast(msgHtml, 'whisper', \`setChatTarget('\${data.fromId}', '\${safeName}')\`);
-
-                    const userCard = document.getElementById('user-card-' + data.fromId);
-                    if (userCard) {
-                        userCard.classList.remove('highlight-pulse');
-                        void userCard.offsetWidth; // Trigger reflow
-                        userCard.classList.add('highlight-pulse');
-                    }
-
-                    if (document.visibilityState === 'hidden' && "Notification" in window && Notification.permission === "granted") {
-                        const notification = new Notification("ZORG-Ω Message", {
-                            body: \`\${data.from}: \${data.message}\`,
-                            icon: '/Icons/favicon.ico'
-                        });
-                        
-                        notification.onclick = function() {
-                            window.focus();
-                            setChatTarget(data.fromId, safeName);
-                            this.close();
-                        };
-                    }
-                });
-
-                function syncEngineUI() {
-                    const loader = document.getElementById('loader');
-                    if (loader && !loader.classList.contains('hidden')) return; // Do not modify if currently executing
-
-                    const m = document.getElementById('mode').value;
-                    const btn = document.getElementById('btn');
-                    if (activeEnginesMap[m] && activeEnginesMap[m].socketId !== window.zorgSocket.id) {
-                        btn.disabled = true;
-                        btn.innerText = \`ENGINE IN USE BY \${activeEnginesMap[m].startedBy.toUpperCase()}\`;
-                        btn.classList.add('opacity-50', 'cursor-not-allowed');
-                        btn.classList.remove('hover:bg-blue-500', 'active:scale-95');
-                    } else {
-                        btn.disabled = false;
-                        btn.innerText = 'EXECUTE ARCHITECT';
-                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                        btn.classList.add('hover:bg-blue-500', 'active:scale-95');
-                    }
-                }
-
-                window.zorgSocket.on('engine-registry-update', (engines) => {
-                    activeEnginesMap = engines;
-                    renderOnlineUsers();
-                    syncEngineUI();
-                });
-
-                window.zorgSocket.on('online-users', (users) => {
-                    currentOnlineUsers = users;
-                    const me = users.find(u => u.id === window.zorgSocket.id);
-                    if (me && me.name) {
-                        zUsername = me.name;
-                        updateProfileUI();
-                    }
-                    renderOnlineUsers();
-                });
-
-                let isUserAdmin = false;
-
-                function createUpdateHtml(u, idx) {
-                    const date = new Date(u.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    let color = "text-purple-400";
-                    let bg = "bg-purple-900/10";
-                    let border = "border-purple-500/20";
-                    if(u.category === 'Alert') { color = "text-red-400"; bg = "bg-red-900/10"; border="border-red-500/20";}
-                    if(u.category === 'Fix') { color = "text-emerald-400"; bg = "bg-emerald-900/10"; border="border-emerald-500/20";}
-                    
-                    const deleteBtn = isUserAdmin ? \`
-                        <button onclick="deleteSystemLog(\${u.id})" class="absolute top-1.5 right-1.5 text-slate-500 hover:text-red-400 transition-colors p-1" title="Delete Log">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>\` : '';
-                    
-                    return \`
-                        <div class="p-3 rounded-xl border \${border} \${bg} shadow-inner fade-in-up relative pr-7" id="log-\${u.id}">
-                            \${deleteBtn}
-                            <div class="flex justify-between items-center mb-1">
-                                <span class="text-[9px] font-black uppercase tracking-widest \${color}">\${u.category}</span>
-                                <span class="text-[8px] font-mono text-slate-500 mr-2">\${date}</span>
-                            </div>
-                            <p class="text-[11px] text-slate-300 font-medium leading-tight">\${u.text}</p>
-                            <div class="text-[8px] text-slate-500 font-bold uppercase tracking-widest mt-1.5 text-right">- \${u.author}</div>
-                        </div>
-                    \`;
-                }
-
-                window.zorgSocket.on('init-data', (data) => {
-                    isUserAdmin = data.isAdmin;
-                    if (data.isAdmin) {
-                        document.getElementById('adminUpdatePanel').classList.remove('hidden');
-                    }
-                    if (data.logs && data.logs.length > 0) {
-                        const listEl = document.getElementById('updatesList');
-                        listEl.innerHTML = data.logs.map((log, idx) => createUpdateHtml(log, idx)).join('');
-                    } else if (data.logs && data.logs.length === 0) {
-                       document.getElementById('updatesList').innerHTML = '';
-                    }
-                    
-                    if (data.activeEngines) {
-                        activeEnginesMap = data.activeEngines;
-                        if (typeof syncEngineUI === 'function') syncEngineUI();
-                    }
-                    
-                    if (data.engineCount !== undefined) {
-                        const badge = document.getElementById('engineCountBadge');
-                        if (badge) badge.innerText = data.engineCount;
-                    }
-                });
-                
-                window.zorgSocket.on('update-engine-count', (count) => {
-                    const badge = document.getElementById('engineCountBadge');
-                    if (badge) badge.innerText = count;
-                });
-
-                window.zorgSocket.on('new-system-update', (log) => {
-                    const listEl = document.getElementById('updatesList');
-                    const wrapper = document.createElement('div');
-                    wrapper.innerHTML = createUpdateHtml(log, log.id);
-                    listEl.prepend(wrapper.firstElementChild);
-                    showToast(\`[\${log.category.toUpperCase()}] System Update Broadcasted\`, log.category === 'Alert' ? 'error' : 'success');
-                });
-                
-                window.zorgSocket.on('clear-logs', () => {
-                   document.getElementById('updatesList').innerHTML = ''; 
-                });
-                
-                window.zorgSocket.on('delete-log', (id) => {
-                   const logEl = document.getElementById('log-' + id);
-                   if (logEl) logEl.remove();
-                });
-
-                function toggleAdminPanel() {
-                    const inputs = document.getElementById('adminUpdateInputs');
-                    if(inputs.classList.contains('max-w-0')) {
-                        inputs.classList.remove('max-w-0', 'opacity-0');
-                        inputs.classList.add('max-w-[400px]', 'opacity-100');
-                        setTimeout(() => document.getElementById('adminUpdateText').focus(), 300);
-                    } else {
-                        inputs.classList.add('max-w-0', 'opacity-0');
-                        inputs.classList.remove('max-w-[400px]', 'opacity-100');
-                    }
-                }
-
-                async function broadcastUpdate() {
-                    const text = document.getElementById('adminUpdateText').value.trim();
-                    const category = document.getElementById('adminUpdateCategory').value;
-                    if(!text) return;
-                    
-                    try {
-                        const res = await fetch('/admin/add-log', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({text, category})
-                        });
-                        const data = await res.json();
-                        if(!res.ok) throw new Error(data.error);
-                        document.getElementById('adminUpdateText').value = '';
-                        toggleAdminPanel(); // Automatically collapse panel once updated!
-                    } catch (e) {
-                        showToast(e.message, "error");
-                    }
-                }
-                
-                async function clearSystemLogs() {
-                    const isConfirmed = await customConfirm("Are you sure you want to clear ALL system updates? This action cannot be undone.", "Clear All Logs");
-                    if (!isConfirmed) return;
-                    
-                    try {
-                        const res = await fetch('/admin/clear-logs', { method: 'POST' });
-                        const data = await res.json();
-                        if (!res.ok) throw new Error(data.error);
-                        showToast("All system logs wiped.", "success");
-                    } catch (e) {
-                        showToast(e.message, "error");
-                    }
-                }
-                
-                async function deleteSystemLog(logId) {
-                    const isConfirmed = await customConfirm("Are you sure you want to delete this specific system update log?", "Delete System Log");
-                    if (!isConfirmed) return;
-                    
-                    try {
-                        const res = await fetch(\`/admin/delete-log/\${logId}\`, { method: 'DELETE' });
-                        const data = await res.json();
-                        if (!res.ok) throw new Error(data.error);
-                    } catch (e) {
-                        showToast(e.message, "error");
-                    }
-                }
-            </script>
-        </body>
-        </html>
-    `);
-});
-
 // --- SYSTEM UPDATES LOGIC ---
 const logsFile = path.join(__dirname, 'logs.json');
 let systemLogs = [];
 try {
     if (fs.existsSync(logsFile)) {
         systemLogs = JSON.parse(fs.readFileSync(logsFile, 'utf8'));
-        // Assign IDs to old logs that lack them
         let modified = false;
         systemLogs = systemLogs.map((log, index) => {
-            if (!log.id) {
-                log.id = Date.now() + index;
-                modified = true;
-            }
+            if (!log.id) { log.id = Date.now() + index; modified = true; }
             return log;
         });
         if (modified) fs.writeFileSync(logsFile, JSON.stringify(systemLogs, null, 2));
     } else {
         fs.writeFileSync(logsFile, JSON.stringify([]));
     }
-} catch (e) {
-    console.error("Error loading logs.json", e);
-}
+} catch (e) { console.error("Error loading logs.json", e); }
 
 app.post('/admin/add-log', (req, res) => {
     let ip = req.socket.remoteAddress || req.ip;
@@ -1808,9 +437,7 @@ app.post('/admin/add-log', (req, res) => {
         authorName = userEntry.name;
     }
 
-    if (!isAdmin) {
-        return res.status(403).json({ error: "Unauthorized. Admin privileges required." });
-    }
+    if (!isAdmin) return res.status(403).json({ error: "Unauthorized. Admin privileges required." });
 
     const { text, category } = req.body;
     if (!text || !category) return res.status(400).json({ error: "Missing text or category." });
@@ -1828,12 +455,9 @@ app.post('/admin/add-log', (req, res) => {
 app.post('/admin/clear-logs', (req, res) => {
     let ip = req.socket.remoteAddress || req.ip;
     if (ip.startsWith('::ffff:')) ip = ip.substring(7);
-    
     let userEntry = savedUsers[ip];
-    if (!userEntry || userEntry.role !== 'admin') {
-        return res.status(403).json({ error: "Unauthorized." });
-    }
-    
+    if (!userEntry || userEntry.role !== 'admin') return res.status(403).json({ error: "Unauthorized." });
+
     systemLogs = [];
     fs.writeFileSync(logsFile, JSON.stringify([]));
     io.emit('clear-logs');
@@ -1843,61 +467,141 @@ app.post('/admin/clear-logs', (req, res) => {
 app.delete('/admin/delete-log/:id', (req, res) => {
     let ip = req.socket.remoteAddress || req.ip;
     if (ip.startsWith('::ffff:')) ip = ip.substring(7);
-    
     let userEntry = savedUsers[ip];
-    if (!userEntry || userEntry.role !== 'admin') {
-        return res.status(403).json({ error: "Unauthorized." });
-    }
-    
+    if (!userEntry || userEntry.role !== 'admin') return res.status(403).json({ error: "Unauthorized." });
+
     const id = parseInt(req.params.id);
     systemLogs = systemLogs.filter(log => log.id !== id);
     fs.writeFileSync(logsFile, JSON.stringify(systemLogs, null, 2));
-    
+
     io.emit('delete-log', id);
     res.json({ success: true });
 });
 
-// --- SOCKET.IO REAL-TIME ONLINE SYSTEM ---
+// --- SOCKET.IO REAL-TIME SYSTEM & HTML GENERATOR ---
 const usersFile = path.join(__dirname, 'users.json');
 let savedUsers = {};
 try {
-    if (fs.existsSync(usersFile)) {
-        savedUsers = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
-    }
-} catch (e) {
-    console.error("Error loading users.json", e);
-}
+    if (fs.existsSync(usersFile)) savedUsers = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+} catch (e) { console.error("Error loading users.json", e); }
 
 const activeUsers = {};
 const activeEngines = {};
+
+function generateDropdownHtml(isAdmin) {
+    let deletedEngines = [];
+    try {
+        const delFile = path.join(__dirname, 'deleted_engines.json');
+        if (fs.existsSync(delFile)) deletedEngines = JSON.parse(fs.readFileSync(delFile, 'utf8'));
+    } catch (e) { }
+
+    const defaultEnginesBase = [
+        { id: 'marketplace', name: 'Map-Dynamics (Marketplace)' },
+        { id: 'dusseldorf', name: 'Messe Düsseldorf' },
+        { id: 'algolia', name: 'NürnbergMesse (Algolia)' },
+        { id: 'informa', name: 'Informa Markets (cURL)' },
+        { id: 'eshow', name: 'eShow (Concurrent)' },
+        { id: 'cadmium', name: 'Cadmium (Harvester)' }
+    ];
+
+    const allCategories = { 'General': [] };
+
+    defaultEnginesBase.forEach(def => {
+        if (deletedEngines.includes(def.id)) return;
+        const customOverride = customEngines.find(e => e.id === def.id);
+        if (customOverride) {
+            const cat = customOverride.category || 'General';
+            if (!allCategories[cat]) allCategories[cat] = [];
+            allCategories[cat].push({ id: def.id, name: customOverride.name, isCustom: false });
+        } else {
+            allCategories['General'].push({ id: def.id, name: def.name, isCustom: false });
+        }
+    });
+
+    customEngines.forEach(e => {
+        if (defaultEnginesBase.some(def => def.id === e.id)) return;
+        if (deletedEngines.includes(e.id)) return;
+        const cat = e.category || 'Custom';
+        if (!allCategories[cat]) allCategories[cat] = [];
+        allCategories[cat].push({ id: e.id, name: e.name, isCustom: true });
+    });
+
+    let customDropdownHtml = '';
+    for (const [cat, engines] of Object.entries(allCategories)) {
+        const isGeneral = cat === 'General';
+        customDropdownHtml += `
+            <div class="border-b border-slate-700/50 last:border-b-0">
+                <div onclick="toggleCategory('${cat}')" class="bg-slate-800 hover:bg-slate-700/50 p-3 flex justify-between items-center cursor-pointer transition-colors group category-header" data-cat-name="${cat.toLowerCase()}">
+                    <span class="text-slate-400 font-bold text-[10px] uppercase tracking-widest group-hover:text-slate-300">${cat}</span>
+                    <svg id="icon-${cat}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-500 transition-transform duration-200 ${isGeneral ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+                <div id="cat-${cat}" class="${isGeneral ? '' : 'hidden'} bg-slate-900/50">
+                    ${engines.map(e => {
+            const editBtn = isAdmin ? `<button onclick="editEngine(event, '${e.id}')" class="text-slate-500 hover:text-blue-400 transition-colors flex items-center justify-center p-1" title="Edit Engine"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>` : '';
+            const delBtn = isAdmin ? `<button onclick="deleteEngine(event, '${e.id}')" class="text-slate-500 hover:text-red-400 transition-colors flex items-center justify-center p-1" title="Delete Engine"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>` : '';
+
+            return `
+                        <div class="engine-item group p-3 pl-5 hover:bg-slate-800 cursor-pointer text-blue-400 font-bold text-sm border-t border-slate-800 transition-colors flex items-center justify-between" onclick="selectEngine('${e.id}', '${e.name.replace(/'/g, "\\'")}')" data-engine-name="${e.name.toLowerCase()}">
+                            <div class="flex flex-row items-center gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full ${e.isCustom ? 'bg-purple-500' : 'bg-blue-500'}"></span>
+                                ${e.name}
+                            </div>
+                            <div class="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                ${editBtn}${delBtn}
+                            </div>
+                        </div>
+                    `}).join('')}
+                </div>
+            </div>
+        `;
+    }
+    return customDropdownHtml;
+}
+
+function generateDynamicEngineData() {
+    const inst = {};
+    const toggleLogic = {};
+
+    customEngines.forEach(e => {
+        inst[e.id] = e.instruction || '';
+        let input = (e.inputType || '').trim();
+        if (input === '' || input.toLowerCase() === 'none') {
+            toggleLogic[e.id] = { type: 'none' };
+        } else {
+            const inputs = input.split(',').map(s => s.trim()).filter(s => s);
+            toggleLogic[e.id] = { type: 'custom', inputs: inputs };
+        }
+    });
+    return { instructions: inst, logic: toggleLogic };
+}
 
 io.on('connection', (socket) => {
     let ip = socket.handshake.address || '';
     if (ip.startsWith('::ffff:')) ip = ip.substring(7);
 
-    // If IP known, register them immediately
     let userEntry = savedUsers[ip];
     let uName = "";
     let isAdmin = false;
 
     if (userEntry) {
-        if (typeof userEntry === 'string') {
-            uName = userEntry;
-        } else {
-            uName = userEntry.name;
-            if (userEntry.role === 'admin') isAdmin = true;
-        }
+        if (typeof userEntry === 'string') { uName = userEntry; }
+        else { uName = userEntry.name; if (userEntry.role === 'admin') isAdmin = true; }
     }
 
     let deletedEnginesCount = 0;
-    try {
-        if (fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) {
-            deletedEnginesCount = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')).length;
-        }
-    } catch(e) {}
+    try { if (fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) deletedEnginesCount = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')).length; } catch (e) { }
     const engineCount = 6 + customEngines.length - deletedEnginesCount;
 
-    socket.emit('init-data', { isAdmin, logs: systemLogs.slice(0, 10), activeEngines, engineCount });
+    // Send payload on connect
+    socket.emit('init-data', {
+        isAdmin,
+        logs: systemLogs.slice(0, 10),
+        activeEngines,
+        engineCount,
+        customDropdownHtml: generateDropdownHtml(isAdmin),
+        dynamicEngineData: generateDynamicEngineData(),
+        userName: uName || "Agent"
+    });
 
     if (uName) {
         activeUsers[socket.id] = { id: socket.id, name: uName, ip: ip, status: 'online' };
@@ -1914,16 +618,16 @@ io.on('connection', (socket) => {
 
         activeUsers[socket.id] = { id: socket.id, name: cleanName, ip: ip, status: 'online' };
         io.emit('online-users', Object.values(activeUsers));
-        
-        let deletedEnginesCount = 0;
-        try {
-            if (fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) {
-                deletedEnginesCount = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')).length;
-            }
-        } catch(e) {}
-        const engineCount = 6 + customEngines.length - deletedEnginesCount;
-        
-        socket.emit('init-data', { isAdmin: false, logs: systemLogs.slice(0, 10), activeEngines, engineCount });
+
+        socket.emit('init-data', {
+            isAdmin: false,
+            logs: systemLogs.slice(0, 10),
+            activeEngines,
+            engineCount,
+            customDropdownHtml: generateDropdownHtml(false),
+            dynamicEngineData: generateDynamicEngineData(),
+            userName: cleanName
+        });
     });
 
     socket.on('disconnect', () => {
@@ -1943,13 +647,16 @@ io.on('connection', (socket) => {
     socket.on('send-private-msg', ({ targetId, message }) => {
         const sender = activeUsers[socket.id];
         if (sender && activeUsers[targetId]) {
-            io.to(targetId).emit('receive-private-msg', { 
-                from: sender.name, 
-                message: message, 
-                fromId: socket.id 
+            io.to(targetId).emit('receive-private-msg', {
+                from: sender.name,
+                message: message,
+                fromId: socket.id
             });
         }
     });
 });
+
+// Serve frontend
+app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
 server.listen(PORT, '0.0.0.0', () => console.log(`🚀 ZORG-Ω Architect Online: http://localhost:${PORT}`));

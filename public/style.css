@@ -1,0 +1,111 @@
+@keyframes bounce {
+
+    0%,
+    80%,
+    100% {
+        transform: scale(0);
+        opacity: 0.3;
+    }
+
+    40% {
+        transform: scale(1.0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in-up {
+    animation: fadeInUp 0.4s ease-out forwards;
+}
+
+.dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    background-color: #10b981;
+    border-radius: 100%;
+    animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.dot1 {
+    animation-delay: -0.32s;
+}
+
+.dot2 {
+    animation-delay: -0.16s;
+}
+
+@keyframes pulseHighlight {
+    0% {
+        border-color: rgba(51, 65, 85, 1);
+        box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+    }
+
+    30% {
+        border-color: rgba(168, 85, 247, 1);
+        box-shadow: 0 0 20px rgba(168, 85, 247, 0.6);
+    }
+
+    100% {
+        border-color: rgba(51, 65, 85, 1);
+        box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+    }
+}
+
+.highlight-pulse {
+    animation: pulseHighlight 2.5s ease-out;
+}
+
+#telemetry::-webkit-scrollbar {
+    width: 6px;
+}
+
+#telemetry::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 10px;
+}
+
+.dropdown-scroll::-webkit-scrollbar {
+    width: 4px;
+}
+
+#searchInput {
+    transition: width 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+}
+
+#searchInput.expanded {
+    width: 14rem;
+    opacity: 1;
+    padding: 0.5rem 1rem;
+}
+
+#searchInput.collapsed {
+    width: 0;
+    opacity: 0;
+    padding: 0;
+    border: none;
+}
+
+select#upCategory {
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem top 50%;
+    background-size: 0.65em auto;
+}
+
+select#upCategory option {
+    background-color: #1e293b;
+    color: white;
+}
