@@ -485,6 +485,19 @@ try {
     if (fs.existsSync(usersFile)) savedUsers = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
 } catch (e) { console.error("Error loading users.json", e); }
 
+// --- CHAT SYSTEM LOGIC ---
+const chatFile = path.join(__dirname, 'chat.json');
+let chatHistory = {};
+try {
+    if (fs.existsSync(chatFile)) chatHistory = JSON.parse(fs.readFileSync(chatFile, 'utf8'));
+    else fs.writeFileSync(chatFile, JSON.stringify({}));
+} catch (e) { console.error("Error loading chat.json", e); }
+
+// Helper to alphabetically link two names together for a unique chat room
+function getChatKey(name1, name2) {
+    return [name1, name2].sort().join(':');
+}
+
 const activeUsers = {};
 const activeEngines = {};
 
@@ -644,14 +657,35 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('send-private-msg', ({ targetId, message }) => {
+    // --- PERSISTENT CHAT ROUTING ---
+    socket.on('request-chat-history', (targetName) => {
         const sender = activeUsers[socket.id];
-        if (sender && activeUsers[targetId]) {
-            io.to(targetId).emit('receive-private-msg', {
-                from: sender.name,
-                message: message,
-                fromId: socket.id
-            });
+        if (!sender || !targetName) return;
+        const key = getChatKey(sender.name, targetName);
+        socket.emit('chat-history', { targetName, history: chatHistory[key] || [] });
+    });
+
+    socket.on('send-private-msg', ({ targetName, message }) => {
+        const sender = activeUsers[socket.id];
+        if (!sender || !targetName) return;
+
+        const key = getChatKey(sender.name, targetName);
+        if (!chatHistory[key]) chatHistory[key] = [];
+
+        const msgObj = { from: sender.name, to: targetName, text: message, timestamp: Date.now() };
+        chatHistory[key].push(msgObj);
+
+        // Keep file at a reasonable size (last 100 messages per chat)
+        if (chatHistory[key].length > 100) chatHistory[key] = chatHistory[key].slice(-100);
+        fs.writeFileSync(chatFile, JSON.stringify(chatHistory, null, 2));
+
+        // 1. Send it back to the sender so their screen updates instantly
+        socket.emit('receive-private-msg', msgObj);
+
+        // 2. Find the target user's current live socket ID and send it to them
+        const targetUser = Object.values(activeUsers).find(u => u.name === targetName);
+        if (targetUser) {
+            io.to(targetUser.id).emit('receive-private-msg', msgObj);
         }
     });
 });

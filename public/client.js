@@ -677,7 +677,7 @@ function renderOnlineUsers() {
         let clickHandler = '';
         if (!isMe) {
             const safeName = (u.name || "?").replace(/'/g, "\\'");
-            clickHandler = `onclick="setChatTarget('${u.id}', '${safeName}')" class="cursor-pointer flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner"`;
+            clickHandler = `onclick="setChatTarget('${safeName}')" class="cursor-pointer flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner"`;
         } else {
             clickHandler = `class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner border-blue-500/30 bg-blue-900/10"`;
         }
@@ -697,80 +697,115 @@ function renderOnlineUsers() {
     }).join('');
 }
 
-let activeWhisperTargetId = null;
+let activeChatTargetName = null;
 
-window.setChatTarget = function (id, name) {
-    activeWhisperTargetId = id;
-    document.getElementById('whisperTargetUi').innerText = 'Messaging: ' + name;
+window.setChatTarget = function (targetName) {
+    activeChatTargetName = targetName;
+    document.getElementById('chatTargetName').innerText = targetName;
 
-    const whisperBox = document.getElementById('whisperBox');
-    whisperBox.classList.replace('hidden', 'flex');
+    const chatBox = document.getElementById('chatBox');
+    chatBox.classList.replace('hidden', 'flex');
+    document.getElementById('chatMessages').innerHTML = '<div class="text-center text-[10px] text-slate-500 mt-4 font-mono animate-pulse">Decrypting history...</div>';
+
+    // Ask server for past messages
+    window.zorgSocket.emit('request-chat-history', targetName);
 
     setTimeout(() => {
-        const sidebar = document.getElementById('onlineSidebar');
-        const input = document.getElementById('whisperInput');
-        input.focus();
-        if (sidebar) sidebar.scrollTop = sidebar.scrollHeight;
+        document.getElementById('chatInput').focus();
     }, 50);
 };
 
-function closeWhisper() {
-    activeWhisperTargetId = null;
-    document.getElementById('whisperBox').classList.replace('flex', 'hidden');
-    document.getElementById('whisperInput').value = '';
+function closeChat() {
+    activeChatTargetName = null;
+    document.getElementById('chatBox').classList.replace('flex', 'hidden');
 }
 
-function sendWhisper() {
-    if (!activeWhisperTargetId) return;
-    const input = document.getElementById('whisperInput');
+function sendChatMessage() {
+    if (!activeChatTargetName) return;
+    const input = document.getElementById('chatInput');
     const msg = input.value.trim();
     if (!msg) return;
 
-    window.zorgSocket.emit('send-private-msg', { targetId: activeWhisperTargetId, message: msg });
-    showToast(`<span class="text-slate-400 text-[10px] block">To ${document.getElementById('whisperTargetUi').innerText.replace('Messaging: ', '')}:</span> ${msg}`, 'success');
+    window.zorgSocket.emit('send-private-msg', { targetName: activeChatTargetName, message: msg });
     input.value = '';
 }
 
-window.zorgSocket.on('receive-private-msg', (data) => {
-    try {
-        const AudioContextConfig = window.AudioContext || window.webkitAudioContext;
-        if (AudioContextConfig) {
-            const ctx = new AudioContextConfig();
-            const osc = ctx.createOscillator();
-            const gainNode = ctx.createGain();
-            osc.connect(gainNode);
-            gainNode.connect(ctx.destination);
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(800, ctx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
-            gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
-            osc.start();
-            osc.stop(ctx.currentTime + 0.5);
-        }
-    } catch (e) { }
+function renderMessageBubble(msgObj) {
+    const isMe = msgObj.from === zUsername;
+    const time = new Date(msgObj.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const safeName = data.from.replace(/'/g, "\\'");
-    const msgHtml = `<span class="text-slate-400 text-[10px] block mb-1">From ${data.from}: <i class="text-slate-500 lowercase">(Click to reply)</i></span> ${data.message}`;
-    showToast(msgHtml, 'whisper', `setChatTarget('${data.fromId}', '${safeName}')`);
+    const alignment = isMe ? 'self-end' : 'self-start';
+    const bgColor = isMe ? 'bg-blue-600/90 text-white' : 'bg-slate-800 border border-slate-700 text-slate-200';
+    const borderRadius = isMe ? 'rounded-2xl rounded-tr-sm' : 'rounded-2xl rounded-tl-sm';
+    const nameColor = isMe ? 'text-blue-300' : 'text-purple-400';
 
-    const userCard = document.getElementById('user-card-' + data.fromId);
-    if (userCard) {
-        userCard.classList.remove('highlight-pulse');
-        void userCard.offsetWidth;
-        userCard.classList.add('highlight-pulse');
+    return `
+        <div class="flex flex-col max-w-[85%] ${alignment} fade-in-up">
+            <div class="flex items-baseline gap-2 mb-1 ${isMe ? 'justify-end' : 'justify-start'} px-1">
+                <span class="text-[9px] font-black uppercase tracking-widest ${nameColor}">${msgObj.from}</span>
+                <span class="text-[8px] font-mono text-slate-500">${time}</span>
+            </div>
+            <div class="px-3 py-2 text-[11px] font-medium shadow-md ${bgColor} ${borderRadius} break-words leading-relaxed">
+                ${msgObj.text}
+            </div>
+        </div>
+    `;
+}
+
+window.zorgSocket.on('chat-history', (data) => {
+    if (data.targetName !== activeChatTargetName) return;
+    const container = document.getElementById('chatMessages');
+    if (data.history.length === 0) {
+        container.innerHTML = '<div class="text-center text-[10px] text-slate-500 mt-4 font-mono italic">No recorded transmissions.</div>';
+    } else {
+        container.innerHTML = data.history.map(renderMessageBubble).join('');
+        container.scrollTop = container.scrollHeight;
+    }
+});
+
+window.zorgSocket.on('receive-private-msg', (msgObj) => {
+    // Render bubble if chat is open with this person
+    if (activeChatTargetName && (msgObj.from === activeChatTargetName || (msgObj.from === zUsername && msgObj.to === activeChatTargetName))) {
+        const container = document.getElementById('chatMessages');
+        if (container.innerHTML.includes('No recorded transmissions')) container.innerHTML = '';
+
+        container.insertAdjacentHTML('beforeend', renderMessageBubble(msgObj));
+        container.scrollTop = container.scrollHeight;
     }
 
-    if (document.visibilityState === 'hidden' && "Notification" in window && Notification.permission === "granted") {
-        const notification = new Notification("ZORG-Ω Message", {
-            body: `${data.from}: ${data.message}`,
-            icon: '/Icons/favicon.ico'
-        });
-        notification.onclick = function () {
-            window.focus();
-            setChatTarget(data.fromId, safeName);
-            this.close();
-        };
+    // Trigger notification ONLY if received from someone else
+    if (msgObj.from !== zUsername) {
+        try {
+            const AudioContextConfig = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextConfig) {
+                const ctx = new AudioContextConfig();
+                const osc = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+                osc.connect(gainNode); gainNode.connect(ctx.destination);
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
+                osc.start(); osc.stop(ctx.currentTime + 0.5);
+            }
+        } catch (e) { }
+
+        const safeName = msgObj.from.replace(/'/g, "\\'");
+        const toastHtml = `<span class="text-slate-400 text-[10px] block mb-1">Transmission from ${msgObj.from}: <i class="text-slate-500 lowercase">(Click to view)</i></span> <span class="text-white">${msgObj.text}</span>`;
+
+        if (activeChatTargetName !== msgObj.from) {
+            showToast(toastHtml, 'whisper', `setChatTarget('${safeName}')`);
+
+            addNotification(`Message: ${msgObj.from}`, msgObj.text, false);
+
+        }
+
+        if (document.visibilityState === 'hidden' && "Notification" in window && Notification.permission === "granted") {
+            const notification = new Notification("ZORG-Ω Message", {
+                body: `${msgObj.from}: ${msgObj.text}`, icon: '/Icons/favicon.ico'
+            });
+            notification.onclick = function () { window.focus(); setChatTarget(safeName); this.close(); };
+        }
     }
 });
 
@@ -913,3 +948,66 @@ async function deleteSystemLog(logId) {
         showToast(e.message, "error");
     }
 }
+
+// -- NOTIFICATIONS SYSTEM --
+let unreadNotifs = 0;
+
+function toggleNotifications() {
+    const panel = document.getElementById('notificationPanel');
+    panel.classList.toggle('hidden');
+
+    if (!panel.classList.contains('hidden')) {
+        // Clear the red badge when opened
+        unreadNotifs = 0;
+        document.getElementById('notifBadge').classList.add('hidden');
+    }
+}
+
+function clearNotifications() {
+    document.getElementById('notificationList').innerHTML = '<div class="text-center p-4 text-[10px] font-mono italic text-slate-600 pointer-events-none">No active alerts.</div>';
+    unreadNotifs = 0;
+    document.getElementById('notifBadge').classList.add('hidden');
+}
+
+function addNotification(title, message, isError = false) {
+    const list = document.getElementById('notificationList');
+    const badge = document.getElementById('notifBadge');
+
+    // Remove empty state if present
+    if (list.innerHTML.includes('No active alerts')) list.innerHTML = '';
+
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const colorClass = isError ? 'text-red-400' : 'text-blue-400';
+    const borderClass = isError ? 'border-red-900/30 bg-red-900/10' : 'border-blue-900/30 bg-blue-900/10';
+
+    const notifHtml = `
+        <div class="p-3 rounded-xl border ${borderClass} shadow-inner fade-in-up">
+            <div class="flex justify-between items-start mb-1">
+                <span class="text-[10px] font-black uppercase tracking-widest ${colorClass}">${title}</span>
+                <span class="text-[8px] font-mono text-slate-500">${time}</span>
+            </div>
+            <p class="text-[11px] text-slate-300 font-medium leading-tight">${message}</p>
+        </div>
+    `;
+
+    list.insertAdjacentHTML('afterbegin', notifHtml);
+
+    // Ping the red badge
+    unreadNotifs++;
+    badge.classList.remove('hidden');
+}
+
+// Reveal the widget once logged in
+window.zorgSocket.on('init-data', (data) => {
+    // (Existing init logic...)
+    document.getElementById('notificationWidget').classList.remove('hidden');
+});
+
+// Close panel if clicked outside
+document.addEventListener('click', function (event) {
+    const widget = document.getElementById('notificationWidget');
+    const panel = document.getElementById('notificationPanel');
+    if (widget && !widget.contains(event.target) && !panel.classList.contains('hidden')) {
+        panel.classList.add('hidden');
+    }
+});
