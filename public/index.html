@@ -63,15 +63,6 @@
 
         <div id="adminUpdatePanel"
             class="hidden flex items-center bg-slate-900/70 p-2 rounded-2xl border border-purple-900/50 shadow-xl backdrop-blur-md transition-all">
-            <button onclick="clearSystemLogs()"
-                class="w-10 h-10 shrink-0 rounded-xl bg-red-600/20 hover:bg-red-600/40 text-red-500 mr-2 flex items-center justify-center transition-colors border border-red-500/30"
-                title="Clear All System Updates">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-            </button>
             <button onclick="toggleAdminPanel()"
                 class="w-10 h-10 shrink-0 rounded-xl bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 flex items-center justify-center transition-colors border border-purple-500/30"
                 title="Broadcast System Update">
@@ -81,8 +72,19 @@
                         d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
                 </svg>
             </button>
+
             <div id="adminUpdateInputs"
                 class="flex items-center overflow-hidden transition-all duration-300 max-w-0 opacity-0 whitespace-nowrap">
+                <button onclick="clearSystemLogs()"
+                    class="w-10 h-10 shrink-0 rounded-xl bg-red-600/20 hover:bg-red-600/40 text-red-500 ml-2 flex items-center justify-center transition-colors border border-red-500/30"
+                    title="Clear All System Updates">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
+
                 <select id="adminUpdateCategory"
                     class="w-24 p-2.5 rounded-xl bg-slate-900 border border-slate-700 outline-none text-xs text-slate-300 ml-2 shadow-inner">
                     <option value="Update">Update</option>

@@ -894,11 +894,11 @@ function toggleAdminPanel() {
     const inputs = document.getElementById('adminUpdateInputs');
     if (inputs.classList.contains('max-w-0')) {
         inputs.classList.remove('max-w-0', 'opacity-0');
-        inputs.classList.add('max-w-[400px]', 'opacity-100');
+        inputs.classList.add('max-w-[500px]', 'opacity-100');
         setTimeout(() => document.getElementById('adminUpdateText').focus(), 300);
     } else {
         inputs.classList.add('max-w-0', 'opacity-0');
-        inputs.classList.remove('max-w-[400px]', 'opacity-100');
+        inputs.classList.remove('max-w-[500px]', 'opacity-100');
     }
 }
 
