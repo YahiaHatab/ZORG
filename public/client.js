@@ -893,13 +893,16 @@ window.zorgSocket.on('delete-log', (id) => {
 
 function toggleAdminPanel() {
     const inputs = document.getElementById('adminUpdateInputs');
+
     if (inputs.classList.contains('max-w-0')) {
+        // EXPAND THE PANEL
         inputs.classList.remove('max-w-0', 'opacity-0');
-        inputs.classList.add('max-w-[500px]', 'opacity-100');
+        inputs.classList.add('max-w-[560px]', 'opacity-100');
         setTimeout(() => document.getElementById('adminUpdateText').focus(), 300);
     } else {
+        // COLLAPSE THE PANEL
+        inputs.classList.remove('max-w-[560px]', 'opacity-100');
         inputs.classList.add('max-w-0', 'opacity-0');
-        inputs.classList.remove('max-w-[500px]', 'opacity-100');
     }
 }
 
@@ -936,6 +939,29 @@ async function clearSystemLogs() {
         showToast(e.message, "error");
     }
 }
+
+// --- ADMIN: FORCE GLOBAL SYNC ---
+async function triggerGlobalRefresh() {
+    const isConfirmed = await customConfirm("WARNING: This will force a page reload for ALL connected Agents, clearing any of their unsaved inputs. Proceed with global sync?", "Global Synchronization");
+    if (isConfirmed) {
+        window.zorgSocket.emit('admin-force-refresh');
+        toggleAdminPanel(); // Close the panel
+    }
+}
+
+// Listen for the Admin's command to refresh
+window.zorgSocket.on('execute-global-refresh', (timestamp) => {
+    // 1. Show a quick warning toast
+    showToast("Admin initiated global synchronization. Reloading...", "whisper");
+
+    // 2. Wait 1.5 seconds so they can read the toast, then forcefully bypass the cache
+    setTimeout(() => {
+        // We append the timestamp to the URL to completely automate the ?v=X cache-busting!
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('v', timestamp);
+        window.location.href = currentUrl.toString();
+    }, 1500);
+});
 
 async function deleteSystemLog(logId) {
     const isConfirmed = await customConfirm("Are you sure you want to delete this specific system update log?", "Delete System Log");

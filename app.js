@@ -726,6 +726,20 @@ io.on('connection', (socket) => {
         });
     });
 
+    // --- ADMIN GLOBAL REFRESH ---
+    socket.on('admin-force-refresh', () => {
+        // 1. Verify Admin status based on IP
+        let ip = socket.handshake.address || '';
+        if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+
+        let userEntry = savedUsers[ip];
+        if (userEntry && typeof userEntry === 'object' && userEntry.role === 'admin') {
+            // 2. Broadcast the execution signal to ALL connected clients
+            // We pass Date.now() to act as our automated cache-buster!
+            io.emit('execute-global-refresh', Date.now());
+        }
+    });
+
     socket.on('disconnect', () => {
         if (activeUsers[socket.id]) {
             delete activeUsers[socket.id];
