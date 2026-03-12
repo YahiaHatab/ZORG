@@ -207,7 +207,7 @@
             </button>
             <!-- Notification panel dropdown -->
             <div id="notificationPanel"
-                class="hidden absolute top-full left-0 mt-3 w-80 bg-slate-900/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden flex flex-col">
+                class="absolute top-full left-0 mt-3 w-80 bg-slate-900/95 border border-slate-700/50 rounded-2xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden flex flex-col transition-all duration-200 ease-out origin-top-left opacity-0 scale-95 pointer-events-none">
                 <div class="p-3 border-b border-slate-700/50 bg-slate-800/50 flex justify-between items-center">
                     <span class="text-[10px] font-black uppercase text-slate-300 tracking-widest">System
                         Alerts</span>
@@ -595,7 +595,7 @@
                     class="flex-1 overflow-y-auto p-3 space-y-3 dropdown-scroll text-sm flex flex-col bg-slate-900/30 min-h-0">
                 </div>
                 <div class="p-2 bg-slate-900 border-t border-slate-700/50 flex gap-2">
-                    <input id="chatInput" type="text" placeholder="Transmit..."
+                    <input id="chatInput" type="text" placeholder="Send..."
                         class="flex-1 p-2 bg-slate-950 border border-slate-700 rounded-lg text-xs outline-none focus:border-purple-500/50 text-slate-200 transition-colors shadow-inner"
                         onkeydown="if(event.key === 'Enter') sendChatMessage()">
                     <button onclick="sendChatMessage()"

@@ -40,5 +40,40 @@
     "instruction": "",
     "inputType": "Custom Input",
     "category": "General"
+  },
+  {
+    "id": "salone2026",
+    "name": "Salone",
+    "instruction": "Instructions: Payload: Press F12 -> Network tab -> Search/Filter \"exhibitorSearch\" -> Click the POST request -> Payload tab -> Copy the string after params: -> Paste",
+    "inputType": "Payload",
+    "category": "Custom"
+  },
+  {
+    "id": "ncs2026",
+    "name": "National Convenience Show (NCS)",
+    "instruction": "",
+    "inputType": "",
+    "category": "Custom"
+  },
+  {
+    "id": "southeast",
+    "name": "SouthEast Green",
+    "instruction": "",
+    "inputType": "",
+    "category": "Custom"
+  },
+  {
+    "id": "cphi2026",
+    "name": "CPHI",
+    "instruction": "Cookie: Press F12 -> Network tab -> Refresh (F5) -> Search by a company name -> Click the POST request -> Headers tab -> Find \"Cookie:\" -> Copy the long text -> Paste into Token.",
+    "inputType": "Cookie",
+    "category": "General"
+  },
+  {
+    "id": "goeshowlist",
+    "name": "goEshowList",
+    "instruction": "Press F12 -> Network tab -> Refresh (F5) -> Filter \"exhibitor_list.cfm\" -> Click the file -> Headers tab -> Copy the \"Request URL\" -> Paste into Custom Input.",
+    "inputType": "Request Header",
+    "category": "General"
   }
 ]

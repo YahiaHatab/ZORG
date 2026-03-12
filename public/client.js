@@ -981,9 +981,16 @@ let unreadNotifs = 0;
 
 function toggleNotifications() {
     const panel = document.getElementById('notificationPanel');
-    panel.classList.toggle('hidden');
+    const isOpen = panel.classList.contains('opacity-100');
 
-    if (!panel.classList.contains('hidden')) {
+    if (isOpen) {
+        // Close — fade + shrink
+        panel.classList.remove('opacity-100', 'scale-100', 'pointer-events-auto');
+        panel.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+    } else {
+        // Open — fade + expand
+        panel.classList.remove('opacity-0', 'scale-95', 'pointer-events-none');
+        panel.classList.add('opacity-100', 'scale-100', 'pointer-events-auto');
         // Clear the red badge when opened
         unreadNotifs = 0;
         document.getElementById('notifBadge').classList.add('hidden');
@@ -1034,8 +1041,9 @@ window.zorgSocket.on('init-data', (data) => {
 document.addEventListener('click', function (event) {
     const widget = document.getElementById('notificationWidget');
     const panel = document.getElementById('notificationPanel');
-    if (widget && !widget.contains(event.target) && !panel.classList.contains('hidden')) {
-        panel.classList.add('hidden');
+    if (widget && !widget.contains(event.target) && panel.classList.contains('opacity-100')) {
+        panel.classList.remove('opacity-100', 'scale-100', 'pointer-events-auto');
+        panel.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
     }
 });
 
