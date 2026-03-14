@@ -29,7 +29,7 @@
   },
   {
     "id": "eurosatory",
-    "name": "Eurosatory",
+    "name": "EurosatoryV2",
     "instruction": "",
     "inputType": "",
     "category": "Custom"
@@ -75,5 +75,26 @@
     "instruction": "Press F12 -> Network tab -> Refresh (F5) -> Filter \"exhibitor_list.cfm\" -> Click the file -> Headers tab -> Copy the \"Request URL\" -> Paste into Custom Input.",
     "inputType": "Request Header",
     "category": "General"
+  },
+  {
+    "id": "smarterev5",
+    "name": "SmartereGeneral",
+    "instruction": "Network -> Payload\nNetwork -> Headers ",
+    "inputType": "MenuPageID, X-CSRF-Token, Cookie",
+    "category": "General"
+  },
+  {
+    "id": "expogenie",
+    "name": "ExpoGeni",
+    "instruction": "",
+    "inputType": "URL",
+    "category": "General"
+  },
+  {
+    "id": "cphichina",
+    "name": "CPHI China (Shanghai) API",
+    "instruction": "Network -> Headers -> Cookies",
+    "inputType": "Cookies",
+    "category": "Custom"
   }
 ]
