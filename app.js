@@ -529,16 +529,19 @@ const bulletinFile = path.join(__dirname, 'bulletin.json');
 let bulletinPosts = [];
 try {
     if (fs.existsSync(bulletinFile)) {
-        bulletinPosts = JSON.parse(fs.readFileSync(bulletinFile, 'utf8'));
+        const parsed = JSON.parse(fs.readFileSync(bulletinFile, 'utf8'));
+        bulletinPosts = Array.isArray(parsed) ? parsed : [];
+        if (!Array.isArray(parsed)) {
+            fs.writeFileSync(bulletinFile, JSON.stringify([], null, 2));
+        }
     } else {
-        // Pre-load with initial context
         bulletinPosts = [
             { id: 101, author: "System", text: "📌 Tax Quiz scheduled for March 17th.", timestamp: Date.now() },
             { id: 102, author: "System", text: "🔗 College Drive Updates Folder: [Awaiting Link]", timestamp: Date.now() }
         ];
         fs.writeFileSync(bulletinFile, JSON.stringify(bulletinPosts, null, 2));
     }
-} catch (e) { console.error("Error loading bulletin.json", e); }
+} catch (e) { console.error("Error loading bulletin.json", e); bulletinPosts = []; }
 
 function generateDropdownHtml(isAdmin) {
     let deletedEngines = [];
@@ -578,36 +581,32 @@ function generateDropdownHtml(isAdmin) {
         allCategories[cat].push({ id: e.id, name: e.name, isCustom: true });
     });
 
-    let customDropdownHtml = '';
+    let html = '';
     for (const [cat, engines] of Object.entries(allCategories)) {
         const isGeneral = cat === 'General';
-        customDropdownHtml += `
-            <div class="border-b border-slate-700/50 last:border-b-0">
-                <div onclick="toggleCategory('${cat}')" class="bg-slate-800 hover:bg-slate-700/50 p-3 flex justify-between items-center cursor-pointer transition-colors group category-header" data-cat-name="${cat.toLowerCase()}">
-                    <span class="text-slate-400 font-bold text-[10px] uppercase tracking-widest group-hover:text-slate-300">${cat}</span>
-                    <svg id="icon-${cat}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-500 transition-transform duration-200 ${isGeneral ? 'rotate-180' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+        html += `
+            <div style="border-bottom:1px solid rgba(255,255,255,0.07);">
+                <div onclick="toggleCategory('${cat}')" class="cat-header">
+                    <span class="cat-label">${cat}</span>
+                    <svg id="icon-${cat}" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" class="cat-chevron ${isGeneral ? 'open' : ''}"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                 </div>
-                <div id="cat-${cat}" class="${isGeneral ? '' : 'hidden'} bg-slate-900/50">
+                <div id="cat-${cat}" style="background:rgba(8,9,13,0.3);" class="${isGeneral ? '' : 'hidden'}">
                     ${engines.map(e => {
-            const editBtn = isAdmin ? `<button onclick="editEngine(event, '${e.id}')" class="text-slate-500 hover:text-blue-400 transition-colors flex items-center justify-center p-1" title="Edit Engine"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>` : '';
-            const delBtn = isAdmin ? `<button onclick="deleteEngine(event, '${e.id}')" class="text-slate-500 hover:text-red-400 transition-colors flex items-center justify-center p-1" title="Delete Engine"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>` : '';
-
+            const editBtn = isAdmin ? `<button onclick="editEngine(event,'${e.id}')" style="color:#3d4260;background:none;border:none;cursor:pointer;display:flex;padding:4px;border-radius:5px;transition:color 0.15s;" onmouseover="this.style.color='#6382ff'" onmouseout="this.style.color='#3d4260'" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>` : '';
+            const delBtn = isAdmin ? `<button onclick="deleteEngine(event,'${e.id}')" style="color:#3d4260;background:none;border:none;cursor:pointer;display:flex;padding:4px;border-radius:5px;transition:color 0.15s;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#3d4260'" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
             return `
-                        <div class="engine-item group p-3 pl-5 hover:bg-slate-800 cursor-pointer text-blue-400 font-bold text-sm border-t border-slate-800 transition-colors flex items-center justify-between" onclick="selectEngine('${e.id}', '${e.name.replace(/'/g, "\\'")}')" data-engine-name="${e.name.toLowerCase()}">
-                            <div class="flex flex-row items-center gap-2">
-                                <span class="w-1.5 h-1.5 rounded-full ${e.isCustom ? 'bg-purple-500' : 'bg-blue-500'}"></span>
+                        <div class="dropdown-engine-item" onclick="selectEngine('${e.id}','${e.name.replace(/'/g, "\\'")}')" data-engine-name="${e.name.toLowerCase()}">
+                            <div style="display:flex;align-items:center;gap:8px;pointer-events:none;">
+                                <span style="width:5px;height:5px;border-radius:50%;background:${e.isCustom ? '#b97cf3' : '#6382ff'};flex-shrink:0;"></span>
                                 ${e.name}
                             </div>
-                            <div class="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                                ${editBtn}${delBtn}
-                            </div>
-                        </div>
-                    `}).join('')}
+                            <div class="action-btns">${editBtn}${delBtn}</div>
+                        </div>`;
+        }).join('')}
                 </div>
-            </div>
-        `;
+            </div>`;
     }
-    return customDropdownHtml;
+    return html;
 }
 
 function generateDynamicEngineData() {

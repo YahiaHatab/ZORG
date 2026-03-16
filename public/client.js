@@ -1,18 +1,6 @@
 let searchActive = false;
 let dynamicInstructions = {};
 let dynamicLogic = {};
-let isUserAdmin = false;
-let zUsername = '';
-let zScrapeCount = 0;
-let currentOnlineUsers = [];
-let activeEnginesMap = {};
-let isManualAway = false;
-let activeChatTargetName = null;
-let unreadNotifs = 0;
-let selectedBulletinFile = null;
-let logInterval;
-let abortController;
-let autoScrollTelemetry = true;
 
 // --- SOCKET & INIT ---
 window.zorgSocket = io();
@@ -26,10 +14,15 @@ window.zorgSocket.on('init-data', (data) => {
     const welcomeTag = document.getElementById('welcome-user');
     if (welcomeTag) welcomeTag.innerText = data.userName;
 
+    // Update profile initial
+    const initialEl = document.getElementById('profileInitial');
+    if (initialEl && data.userName) initialEl.innerText = data.userName.charAt(0).toUpperCase();
+
     // 2. Admin Privileges
     isUserAdmin = data.isAdmin;
     if (data.isAdmin) {
-        document.getElementById('adminUpdatePanel').classList.remove('hidden');
+        const adminPanel = document.getElementById('adminUpdatePanel');
+        if (adminPanel) adminPanel.style.display = 'flex';
     }
 
     // 3. Render Logs
@@ -54,22 +47,17 @@ window.zorgSocket.on('init-data', (data) => {
     if (data.activeEngines) {
         activeEnginesMap = data.activeEngines;
         syncEngineUI();
+        renderEngineActivity();
     }
     if (data.engineCount !== undefined) {
         document.getElementById('engineCountBadge').innerText = data.engineCount;
     }
-
-    // 7. Show Notification Widget
-    const notifWidget = document.getElementById('notificationWidget');
-    if (notifWidget) notifWidget.classList.remove('hidden');
-
-    // 8. Render Bulletin Posts
-    if (data.bulletinPosts) {
-        const bulletinList = document.getElementById('bulletinList');
-        if (bulletinList) bulletinList.innerHTML = data.bulletinPosts.map(createBulletinHtml).join('');
-    }
-
     toggle(); // re-run toggle to apply new logic
+
+    // Render bulletin board
+    if (data.bulletinPosts) {
+        document.getElementById('bulletinList').innerHTML = data.bulletinPosts.map(createBulletinHtml).join('');
+    }
 });
 
 // -- DROPDOWN & SEARCH --
@@ -80,11 +68,11 @@ function toggleSearch() {
     const searchInput = document.getElementById('engineSearchInput');
 
     if (searchActive) {
-        searchContainer.classList.remove('hidden');
-        dropdownMenu.classList.remove('hidden');
+        searchContainer.style.display = 'block';
+        dropdownMenu.style.display = 'flex';
         searchInput.focus();
     } else {
-        searchContainer.classList.add('hidden');
+        searchContainer.style.display = 'none';
         searchInput.value = '';
         filterEngines();
     }
@@ -92,47 +80,50 @@ function toggleSearch() {
 
 function filterEngines() {
     const term = document.getElementById('engineSearchInput').value.toLowerCase();
-    const items = document.querySelectorAll('.engine-item');
-    let anyVisible = false;
+    const items = document.querySelectorAll('.dropdown-engine-item');
 
     if (term === '') {
         items.forEach(item => item.style.display = 'flex');
-        const categories = document.querySelectorAll('#engineListContainer .border-b.border-slate-700\\/50');
-        categories.forEach(cat => {
-            cat.style.display = 'block';
-        });
+        // Show all category containers
+        document.querySelectorAll('[id^="cat-"]').forEach(cat => cat.classList.remove('hidden'));
         document.getElementById('noResults').classList.add('hidden');
         return;
     }
 
+    let anyVisible = false;
     items.forEach(item => {
-        const name = item.getAttribute('data-engine-name');
+        const name = item.getAttribute('data-engine-name') || '';
         if (name.includes(term)) {
             item.style.display = 'flex';
             anyVisible = true;
-            const parentCat = item.closest('.bg-slate-900\\/50');
-            if (term !== '' && parentCat) {
+            // Expand parent category
+            const parentCat = item.closest('[id^="cat-"]');
+            if (parentCat) {
                 parentCat.classList.remove('hidden');
-                const headerId = parentCat.id.replace('cat-', 'icon-');
-                document.getElementById(headerId).classList.add('rotate-180');
+                const catName = parentCat.id.replace('cat-', '');
+                const icon = document.getElementById('icon-' + catName);
+                if (icon) icon.classList.add('rotate-180');
             }
         } else {
             item.style.display = 'none';
         }
     });
 
-    document.getElementById('noResults').classList.toggle('hidden', !!anyVisible || items.length === 0);
+    document.getElementById('noResults').classList.toggle('hidden', anyVisible);
 
-    const categories = document.querySelectorAll('#engineListContainer .border-b.border-slate-700\\/50');
-    categories.forEach(cat => {
-        const visibleItems = cat.querySelectorAll('.engine-item[style="display: flex;"], .engine-item:not([style="display: none;"])');
-        cat.style.display = visibleItems.length > 0 ? 'block' : 'none';
+    // Hide category sections that have no visible items
+    document.querySelectorAll('[id^="cat-"]').forEach(catDiv => {
+        const visibleItems = catDiv.querySelectorAll('.dropdown-engine-item:not([style*="none"])');
+        const parent = catDiv.parentElement;
+        if (parent) parent.style.display = visibleItems.length > 0 ? 'block' : 'none';
     });
 }
 
 function toggleDropdownMenu() {
-    document.getElementById('dropdownMenu').classList.toggle('hidden');
-    if (searchActive) setTimeout(() => document.getElementById('engineSearchInput').focus(), 50);
+    const menu = document.getElementById('dropdownMenu');
+    const isHidden = menu.style.display === 'none' || menu.style.display === '';
+    menu.style.display = isHidden ? 'flex' : 'none';
+    if (isHidden && searchActive) setTimeout(() => document.getElementById('engineSearchInput').focus(), 50);
 }
 
 function toggleCategory(cat) {
@@ -150,7 +141,7 @@ function toggleCategory(cat) {
 function selectEngine(id, name) {
     document.getElementById('mode').value = id;
     document.getElementById('dropdownBtnText').innerText = name;
-    document.getElementById('dropdownMenu').classList.add('hidden');
+    document.getElementById('dropdownMenu').style.display = 'none';
     toggle();
 }
 
@@ -160,7 +151,7 @@ document.addEventListener('click', function (event) {
     const searchBtn = document.querySelector('button[title="Search Engines"]');
 
     if (dropdownBtn && dropdownMenu && !dropdownBtn.contains(event.target) && !dropdownMenu.contains(event.target) && (!searchBtn || !searchBtn.contains(event.target))) {
-        dropdownMenu.classList.add('hidden');
+        dropdownMenu.style.display = 'none';
     }
 });
 
@@ -179,12 +170,16 @@ function toggle() {
     };
     document.getElementById('instructionContent').innerText = defaultInst[m] || dynamicInstructions[m] || "No instructions provided.";
 
+    // Helper: show/hide with display flex
+    const show = (id, type = 'flex') => { const el = document.getElementById(id); if (el) el.style.display = type; };
+    const hide = (id) => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
+
     // Built-in boxes
-    document.getElementById('marketBox').classList.toggle('hidden', m !== 'marketplace');
-    document.getElementById('standardBox').classList.toggle('hidden', !['dusseldorf'].includes(m));
-    document.getElementById('curlBox').classList.toggle('hidden', !['algolia', 'informa'].includes(m));
-    document.getElementById('eshowBox').classList.toggle('hidden', m !== 'eshow');
-    document.getElementById('cadBox').classList.toggle('hidden', m !== 'cadmium');
+    m === 'marketplace' ? show('marketBox') : hide('marketBox');
+    ['dusseldorf'].includes(m) ? show('standardBox') : hide('standardBox');
+    ['algolia', 'informa'].includes(m) ? show('curlBox') : hide('curlBox');
+    m === 'eshow' ? show('eshowBox') : hide('eshowBox');
+    m === 'cadmium' ? show('cadBox') : hide('cadBox');
 
     if (m === 'algolia') document.getElementById('curl').placeholder = "Paste Algolia API cURL here...";
     if (m === 'informa') document.getElementById('curl').placeholder = "Paste Informa API cURL here...";
@@ -194,17 +189,17 @@ function toggle() {
     if (dynamicLogic[m]) {
         if (dynamicLogic[m].type === 'none') {
             customBox.innerHTML = '';
-            customBox.classList.add('hidden');
+            hide('customInputBox');
         } else if (dynamicLogic[m].type === 'custom') {
             const inputs = dynamicLogic[m].inputs;
             const inputHtml = inputs.map((placeholder, idx) =>
-                '<input id="customInput_' + idx + '" type="text" placeholder="' + placeholder.replace(/"/g, '&quot;').replace(/'/g, "\\'") + '" class="custom-dynamic-input w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">'
+                `<input id="customInput_${idx}" type="text" placeholder="${placeholder.replace(/"/g, '&quot;').replace(/'/g, "\\'")}" class="custom-dynamic-input inp">`
             ).join('');
             customBox.innerHTML = inputHtml;
-            customBox.classList.remove('hidden');
+            show('customInputBox');
         }
     } else {
-        customBox.classList.add('hidden');
+        hide('customInputBox');
     }
 
     if (typeof syncEngineUI === 'function') syncEngineUI();
@@ -216,41 +211,47 @@ function showToast(message, type = 'success', onClickAction = '') {
         const container = document.getElementById('toastContainer');
         const toast = document.createElement('div');
 
-        let bgClass = '';
-        let iconClass = '';
-        let titleStr = '';
-        let iconSvg = '';
+        const configs = {
+            success: { bg: 'rgba(14,24,20,0.97)', border: 'rgba(62,207,142,0.35)', icon: '#3ecf8e', label: 'SUCCESS', svg: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>' },
+            error: { bg: 'rgba(24,10,10,0.97)', border: 'rgba(248,113,113,0.35)', icon: '#f87171', label: 'ERROR', svg: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>' },
+            whisper: { bg: 'rgba(18,12,28,0.97)', border: 'rgba(185,124,243,0.35)', icon: '#b97cf3', label: 'TRANSMISSION', svg: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>' }
+        };
 
-        if (type === 'success') {
-            bgClass = 'bg-emerald-900/95 border-emerald-500/50 shadow-emerald-900/50';
-            iconClass = 'text-emerald-400';
-            titleStr = 'SUCCESS';
-            iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>';
-        } else if (type === 'error') {
-            bgClass = 'bg-red-900/95 border-red-500/50 shadow-red-900/50';
-            iconClass = 'text-red-400';
-            titleStr = 'ERROR';
-            iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>';
-        } else if (type === 'whisper') {
-            bgClass = 'bg-purple-900/95 border-purple-500/50 shadow-purple-900/50 hover:bg-purple-800/95 cursor-pointer';
-            iconClass = 'text-purple-400';
-            titleStr = 'TRANSMISSION';
-            iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z" clip-rule="evenodd" /></svg>';
-        }
+        const c = configs[type] || configs.success;
 
-        toast.className = 'transform transition-all duration-300 translate-x-12 opacity-0 flex items-start gap-4 p-4 rounded-xl border shadow-2xl backdrop-blur-xl w-80 pointer-events-auto ' + bgClass;
+        toast.style.cssText = `
+            pointer-events: ${onClickAction ? 'auto' : 'none'};
+            display: flex; align-items: flex-start; gap: 12px;
+            padding: 12px 14px; border-radius: 12px;
+            border: 1px solid ${c.border}; background: ${c.bg};
+            backdrop-filter: blur(20px); width: 296px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            transform: translateX(20px); opacity: 0;
+            transition: all 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
+            ${onClickAction ? 'cursor:pointer;' : ''}
+        `;
         if (onClickAction) toast.setAttribute('onclick', onClickAction);
-        toast.innerHTML =
-            '<div class="shrink-0 ' + iconClass + ' mt-0.5">' + iconSvg + '</div>' +
-            '<div class="flex-1">' +
-            '<h4 class="' + iconClass + ' font-black text-xs uppercase tracking-widest mb-1 italic">' + titleStr + '</h4>' +
-            '<p class="text-slate-200 text-sm font-medium">' + message + '</p>' +
-            '</div>';
+
+        toast.innerHTML = `
+            <div style="flex-shrink:0;margin-top:2px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="${c.icon}" stroke-width="2">${c.svg}</svg>
+            </div>
+            <div style="flex:1;min-width:0;">
+                <div style="font-family:'Space Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:${c.icon};margin-bottom:3px;">${c.label}</div>
+                <div style="font-size:12px;font-weight:500;line-height:1.5;color:#e8eaf0;">${message}</div>
+            </div>
+        `;
 
         container.appendChild(toast);
-        requestAnimationFrame(() => toast.classList.remove('translate-x-12', 'opacity-0'));
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                toast.style.transform = 'translateX(0)';
+                toast.style.opacity = '1';
+            });
+        });
         setTimeout(() => {
-            toast.classList.add('translate-x-12', 'opacity-0');
+            toast.style.transform = 'translateX(20px)';
+            toast.style.opacity = '0';
             setTimeout(() => { toast.remove(); resolve(); }, 300);
         }, 4000);
     });
@@ -259,57 +260,57 @@ function showToast(message, type = 'success', onClickAction = '') {
 function customConfirm(message, title = "Confirm Action") {
     return new Promise(resolve => {
         const modal = document.getElementById('customDialogModal');
-        document.getElementById('dialogTitle').innerText = title;
-        document.getElementById('dialogTitle').className = "text-xl font-black text-yellow-500 mb-3 italic tracking-tighter uppercase";
+        const titleEl = document.getElementById('dialogTitle');
+        titleEl.innerText = title;
+        titleEl.style.color = '#f5a623';
         document.getElementById('dialogMessage').innerText = message;
-        document.getElementById('dialogInput').classList.add('hidden');
+        document.getElementById('dialogInput').style.display = 'none';
 
         const cancelBtn = document.getElementById('dialogCancelBtn');
-        cancelBtn.classList.remove('hidden');
+        cancelBtn.style.display = 'inline-flex';
 
         const confirmBtn = document.getElementById('dialogConfirmBtn');
-        confirmBtn.className = "px-5 py-2.5 rounded-xl bg-red-600 text-white font-black hover:bg-red-500 transition-all text-sm uppercase tracking-wider shadow-lg shadow-red-900/20";
+        confirmBtn.style.background = '#ef4444';
         confirmBtn.innerText = "Proceed";
 
         const handleConfirm = () => { cleanup(); resolve(true); };
         const handleCancel = () => { cleanup(); resolve(false); };
-
         const cleanup = () => {
-            modal.classList.replace('flex', 'hidden');
+            modal.classList.remove('open');
             confirmBtn.removeEventListener('click', handleConfirm);
             cancelBtn.removeEventListener('click', handleCancel);
         };
 
         confirmBtn.addEventListener('click', handleConfirm);
         cancelBtn.addEventListener('click', handleCancel);
-        modal.classList.replace('hidden', 'flex');
+        modal.classList.add('open');
     });
 }
 
 function customPrompt(message, title = "Authentication Required") {
     return new Promise(resolve => {
         const modal = document.getElementById('customDialogModal');
-        document.getElementById('dialogTitle').innerText = title;
-        document.getElementById('dialogTitle').className = "text-xl font-black text-purple-500 mb-3 italic tracking-tighter uppercase";
+        const titleEl = document.getElementById('dialogTitle');
+        titleEl.innerText = title;
+        titleEl.style.color = '#b97cf3';
         document.getElementById('dialogMessage').innerText = message;
 
         const input = document.getElementById('dialogInput');
         input.value = '';
-        input.classList.remove('hidden');
+        input.style.display = 'block';
 
         const cancelBtn = document.getElementById('dialogCancelBtn');
-        cancelBtn.classList.remove('hidden');
+        cancelBtn.style.display = 'inline-flex';
 
         const confirmBtn = document.getElementById('dialogConfirmBtn');
-        confirmBtn.className = "px-5 py-2.5 rounded-xl bg-purple-600 text-white font-black hover:bg-purple-500 transition-all text-sm uppercase tracking-wider shadow-lg shadow-purple-900/20";
+        confirmBtn.style.background = '#b97cf3';
         confirmBtn.innerText = "Submit";
 
         const handleConfirm = () => { cleanup(); resolve(input.value); };
         const handleCancel = () => { cleanup(); resolve(null); };
         const handleEnter = (e) => { if (e.key === 'Enter') handleConfirm(); };
-
         const cleanup = () => {
-            modal.classList.replace('flex', 'hidden');
+            modal.classList.remove('open');
             confirmBtn.removeEventListener('click', handleConfirm);
             cancelBtn.removeEventListener('click', handleCancel);
             input.removeEventListener('keypress', handleEnter);
@@ -318,8 +319,7 @@ function customPrompt(message, title = "Authentication Required") {
         confirmBtn.addEventListener('click', handleConfirm);
         cancelBtn.addEventListener('click', handleCancel);
         input.addEventListener('keypress', handleEnter);
-
-        modal.classList.replace('hidden', 'flex');
+        modal.classList.add('open');
         setTimeout(() => input.focus(), 50);
     });
 }
@@ -334,21 +334,21 @@ function openUploadModal() {
     document.getElementById('upInputType').value = "";
     document.getElementById('upInst').value = "";
     document.getElementById('upCode').value = "";
-    document.getElementById('uploadModal').classList.replace('hidden', 'flex');
+    document.getElementById('uploadModal').classList.add('open');
 }
 
 function closeUploadModal() {
-    document.getElementById('uploadModal').classList.replace('flex', 'hidden');
+    document.getElementById('uploadModal').classList.remove('open');
 }
 
 function showSuccessModal(count) {
     const formattedCount = parseInt(count || 0).toLocaleString();
     document.getElementById('successModalDesc').innerText = formattedCount + ' Distinct Records Assembled. Exporting...';
-    document.getElementById('successModal').classList.replace('hidden', 'flex');
+    document.getElementById('successModal').classList.add('open');
 }
 
 function closeSuccessModal() {
-    document.getElementById('successModal').classList.replace('flex', 'hidden');
+    document.getElementById('successModal').classList.remove('open');
 }
 
 async function editEngine(e, id) {
@@ -373,8 +373,8 @@ async function editEngine(e, id) {
         document.getElementById('upInst').value = data.instruction || "";
         document.getElementById('upCode').value = data.code;
 
-        document.getElementById('uploadModal').classList.replace('hidden', 'flex');
-        document.getElementById('dropdownMenu').classList.add('hidden');
+        document.getElementById('uploadModal').classList.add('open');
+        document.getElementById('dropdownMenu').style.display = 'none';
     } catch (err) {
         showToast(err.message, "error");
     }
@@ -434,6 +434,8 @@ async function submitUpload() {
 }
 
 // -- PROFILE --
+let zUsername = '';
+let zScrapeCount = 0;
 
 function initProfile() {
     const storedDate = localStorage.getItem('zorg_last_scrape_date');
@@ -462,18 +464,22 @@ function handleLogin() {
     requestNotificationPermission();
     if (window.zorgSocket) window.zorgSocket.emit('register-name', nameInput);
 
-    document.getElementById('loginOverlay').classList.add('opacity-0');
+    const overlay = document.getElementById('loginOverlay');
+    overlay.style.opacity = '0';
     setTimeout(() => {
-        document.getElementById('loginOverlay').classList.add('hidden');
+        overlay.classList.remove('open');
         updateProfileUI();
-        showToast(`Welcome to the network, Agent ${zUsername}.`, "success");
-    }, 500);
+        showToast(`Welcome to the network, ${zUsername}.`, "success");
+    }, 400);
 }
 
 function updateProfileUI() {
-    document.getElementById('userProfile').classList.remove('hidden');
-    document.getElementById('notificationWidget').classList.remove('hidden');
-    document.getElementById('profileName').innerHTML = `${zUsername} <span class="text-[0.6rem] ml-1">🟢</span>`;
+    const profileEl = document.getElementById('userProfile');
+    if (profileEl) profileEl.style.display = 'flex';
+    const profileName = document.getElementById('welcome-user');
+    if (profileName) profileName.innerText = zUsername;
+    const profileInitial = document.getElementById('profileInitial');
+    if (profileInitial && zUsername) profileInitial.innerText = zUsername.charAt(0).toUpperCase();
     document.getElementById('scrapeCount').innerText = zScrapeCount;
 }
 
@@ -486,6 +492,9 @@ function incrementScrapeCount() {
 initProfile();
 
 // -- EXECUTION & TELEMETRY --
+let logInterval;
+let abortController;
+let autoScrollTelemetry = true;
 
 function copyTelemetry() {
     const text = document.getElementById('telemetry').innerText;
@@ -514,14 +523,16 @@ function toggleTelemetryScroll() {
 function stopRun() {
     if (abortController) abortController.abort();
     clearInterval(logInterval);
-    document.getElementById('telemetry').innerHTML += '<br><span style="color:red;">> [ERROR] OPERATION ABORTED BY USER (Client Side Halt)</span>';
-    document.getElementById('loader').classList.add('hidden');
-    document.getElementById('errorText').classList.remove('hidden');
+    document.getElementById('telemetry').innerHTML += '<br><span style="color:#f87171;">> [ERROR] OPERATION ABORTED BY USER (Client Side Halt)</span>';
+    document.getElementById('loader').style.display = 'none';
+    document.getElementById('errorText').style.display = 'block';
     document.getElementById('btn').disabled = false;
 
     const stopBtn = document.getElementById('stopBtn');
-    stopBtn.classList.add('pointer-events-none', 'opacity-50');
-    stopBtn.classList.remove('bg-red-600/20', 'border-red-500');
+    stopBtn.style.pointerEvents = 'none';
+    stopBtn.style.opacity = '0.4';
+    stopBtn.style.borderColor = 'var(--border)';
+    stopBtn.style.background = 'var(--bg-raised)';
 }
 
 function clearInputs() {
@@ -545,15 +556,18 @@ async function run() {
     const telemetry = document.getElementById('telemetry');
 
     btn.disabled = true;
-    stopBtn.classList.remove('pointer-events-none', 'opacity-50');
-    stopBtn.classList.add('bg-red-600/20', 'border-red-500');
+    // Enable stop button
+    stopBtn.style.pointerEvents = 'auto';
+    stopBtn.style.opacity = '1';
+    stopBtn.style.borderColor = 'rgba(248,113,113,0.4)';
+    stopBtn.style.background = 'rgba(248,113,113,0.08)';
 
-    counterArea.classList.remove('hidden');
-    loader.classList.remove('hidden');
-    completeText.classList.add('hidden');
-    errorText.classList.add('hidden');
+    counterArea.style.display = 'flex';
+    loader.style.display = 'flex';
+    completeText.style.display = 'none';
+    errorText.style.display = 'none';
 
-    telemetryBox.classList.remove('hidden');
+    telemetryBox.style.display = 'block';
     telemetry.innerHTML = '';
 
     logInterval = setInterval(async () => {
@@ -597,6 +611,7 @@ async function run() {
             throw new Error(errData.error || 'Crawl Failed.');
         }
 
+        const count = response.headers.get('X-Record-Count');
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -604,19 +619,22 @@ async function run() {
         a.download = (document.getElementById('file').value || 'Scrape') + '.xlsx';
         a.click();
 
-        loader.classList.add('hidden');
-        completeText.classList.remove('hidden');
+        loader.style.display = 'none';
+        completeText.style.display = 'block';
+        if (count) showToast(`${parseInt(count).toLocaleString()} records extracted.`, 'success');
         incrementScrapeCount();
     } catch (err) {
         if (err.name === 'AbortError') return;
-        loader.classList.add('hidden');
-        errorText.classList.remove('hidden');
-        telemetry.innerHTML += '<br><span style="color:red;">> [ERROR] ' + err.message + '</span>';
+        loader.style.display = 'none';
+        errorText.style.display = 'block';
+        telemetry.innerHTML += '<br><span style="color:#f87171;">> [ERROR] ' + err.message + '</span>';
         telemetry.scrollTop = telemetry.scrollHeight;
     } finally {
         btn.disabled = false;
-        stopBtn.classList.add('pointer-events-none', 'opacity-50');
-        stopBtn.classList.remove('bg-red-600/20', 'border-red-500');
+        stopBtn.style.pointerEvents = 'none';
+        stopBtn.style.opacity = '0.4';
+        stopBtn.style.borderColor = 'var(--border)';
+        stopBtn.style.background = 'var(--bg-raised)';
         setTimeout(() => clearInterval(logInterval), 1500);
     }
 }
@@ -631,11 +649,15 @@ async function shutdown() {
 
 // -- PRESENCE & WHISPERS --
 window.zorgSocket.on('request-name', () => {
-    document.getElementById('loginOverlay').classList.remove('hidden');
-    setTimeout(() => {
-        document.getElementById('loginOverlay').classList.remove('opacity-0');
-        document.getElementById('loginName').focus();
-    }, 50);
+    const overlay = document.getElementById('loginOverlay');
+    overlay.style.opacity = '0';
+    overlay.classList.add('open');
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            overlay.style.opacity = '1';
+            setTimeout(() => document.getElementById('loginName').focus(), 100);
+        });
+    });
 });
 
 function requestNotificationPermission() {
@@ -645,6 +667,10 @@ function requestNotificationPermission() {
         }
     }
 }
+
+let currentOnlineUsers = [];
+let activeEnginesMap = {};
+let isManualAway = false;
 
 function toggleStatusManual() {
     isManualAway = !isManualAway;
@@ -668,69 +694,86 @@ function renderOnlineUsers() {
         const isMe = u.id === window.zorgSocket.id;
         const initial = (u.name || "?").charAt(0).toUpperCase();
 
-        let engStatusText = '🟢 Online';
-        let engStatusColor = 'bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)] animate-pulse';
+        let statusText = 'Online';
+        let statusClass = 'status-online';
 
         if (u.status === 'away') {
-            engStatusText = '🌙 Away';
-            engStatusColor = 'bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.8)]';
+            statusText = 'Away';
+            statusClass = 'status-away';
         }
 
         const engEntry = Object.values(activeEnginesMap).find(e => e.socketId === u.id);
         if (engEntry) {
-            engStatusText = '🛠️ Using ' + (engEntry.engineName || engEntry.mode);
-            engStatusColor = 'bg-orange-500 shadow-[0_0_5px_rgba(249,115,22,0.8)] animate-pulse';
+            statusText = (engEntry.engineName || engEntry.mode);
+            statusClass = 'status-busy';
         }
 
-        let dotHtml = `<div class="w-2 h-2 rounded-full ${engStatusColor} shrink-0"></div>`;
+        let dotHtml = `<div class="status-dot ${statusClass}"></div>`;
         if (isMe) {
-            dotHtml = `<button onclick="toggleStatusManual()" class="w-4 h-4 flex items-center justify-center rounded-full hover:scale-125 transition-transform shrink-0" title="Click to manually toggle Away/Online"><div class="w-2 h-2 rounded-full ${engStatusColor} pointer-events-none"></div></button>`;
+            dotHtml = `<button onclick="toggleStatusManual()" style="background:none;border:none;cursor:pointer;display:flex;padding:0;" title="Toggle Away/Online"><div class="status-dot ${statusClass}" style="pointer-events:none;"></div></button>`;
         }
 
-        let clickHandler = '';
-        if (!isMe) {
-            const safeName = (u.name || "?").replace(/'/g, "\\'");
-            clickHandler = `onclick="setChatTarget('${safeName}')" class="cursor-pointer flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner"`;
-        } else {
-            clickHandler = `class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:bg-slate-700/80 transition-colors shadow-inner border-blue-500/30 bg-blue-900/10"`;
-        }
+        const safeName = (u.name || "?").replace(/'/g, "\\'");
+        const clickAttr = !isMe ? `onclick="setChatTarget('${safeName}')"` : '';
+        const cardClass = isMe ? 'user-card is-me' : 'user-card';
 
         return `
-            <div id="user-card-${u.id}" ${clickHandler}>
-                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center border border-blue-500/30 shrink-0 shadow-lg shadow-black/20">
-                    <span class="text-xs font-black text-blue-400">${initial}</span>
-                </div>
-                <div class="flex-1 overflow-hidden pointer-events-none">
-                    <div class="text-[11px] font-bold truncate ${isMe ? 'text-blue-400' : 'text-slate-200'}">${u.name} ${isMe ? '<span class="text-[9px] text-slate-500 font-mono ml-1">(You)</span>' : ''}</div>
-                    <div class="text-[9px] font-mono text-slate-400 font-bold truncate">${engStatusText}</div>
+            <div class="${cardClass}" ${clickAttr} id="user-card-${u.id}">
+                <div class="user-avatar">${initial}</div>
+                <div style="flex:1;overflow:hidden;pointer-events:none;">
+                    <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${isMe ? '#6382ff' : '#e8eaf0'};">
+                        ${u.name} ${isMe ? '<span style="font-family:\'Space Mono\',monospace;font-size:8px;color:#3d4260;"> (You)</span>' : ''}
+                    </div>
+                    <div style="font-family:\'Space Mono\',monospace;font-size:9px;color:#7c82a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;">${statusText}</div>
                 </div>
                 ${dotHtml}
             </div>
         `;
     }).join('');
+    renderEngineActivity();
 }
 
-// -- CHAT LOGIC --
+function renderEngineActivity() {
+    const listEl = document.getElementById('engineActivityList');
+    if (!listEl) return;
+    const engines = Object.values(activeEnginesMap);
+    if (engines.length === 0) {
+        listEl.innerHTML = '<div style="text-align:center;padding:12px;color:#3d4260;font-family:\'Space Mono\',monospace;font-size:10px;">All engines idle.</div>';
+        return;
+    }
+    listEl.innerHTML = engines.map(e => {
+        const elapsed = Math.floor((Date.now() - e.startTime) / 1000);
+        const mins = Math.floor(elapsed / 60);
+        const secs = elapsed % 60;
+        return `
+            <div class="engine-active-item">
+                <div style="width:6px;height:6px;border-radius:50%;background:#f97316;box-shadow:0 0 6px rgba(249,115,22,0.7);flex-shrink:0;margin-top:3px;animation:pulse-glow 1.5s infinite;"></div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:11px;font-weight:600;color:#f97316;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.engineName || e.mode}</div>
+                    <div style="font-family:'Space Mono',monospace;font-size:9px;color:#7c82a0;margin-top:2px;">${e.startedBy} · ${mins}m ${secs}s</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+let activeChatTargetName = null;
 
 window.setChatTarget = function (targetName) {
     activeChatTargetName = targetName;
     document.getElementById('chatTargetName').innerText = targetName;
 
     const chatBox = document.getElementById('chatBox');
-    chatBox.classList.replace('hidden', 'flex');
-    document.getElementById('chatMessages').innerHTML = '<div class="text-center text-[10px] text-slate-500 mt-4 font-mono animate-pulse">Decrypting history...</div>';
+    chatBox.style.display = 'flex';
+    document.getElementById('chatMessages').innerHTML = '<div style="text-align:center;padding:20px;font-family:\'Space Mono\',monospace;font-size:10px;color:#3d4260;">Decrypting history...</div>';
 
-    // Ask server for past messages
     window.zorgSocket.emit('request-chat-history', targetName);
-
-    setTimeout(() => {
-        document.getElementById('chatInput').focus();
-    }, 50);
+    setTimeout(() => document.getElementById('chatInput').focus(), 50);
 };
 
 function closeChat() {
     activeChatTargetName = null;
-    document.getElementById('chatBox').classList.replace('flex', 'hidden');
+    document.getElementById('chatBox').style.display = 'none';
 }
 
 function sendChatMessage() {
@@ -747,20 +790,13 @@ function renderMessageBubble(msgObj) {
     const isMe = msgObj.from === zUsername;
     const time = new Date(msgObj.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const alignment = isMe ? 'self-end' : 'self-start';
-    const bgColor = isMe ? 'bg-blue-600/90 text-white' : 'bg-slate-800 border border-slate-700 text-slate-200';
-    const borderRadius = isMe ? 'rounded-2xl rounded-tr-sm' : 'rounded-2xl rounded-tl-sm';
-    const nameColor = isMe ? 'text-blue-300' : 'text-purple-400';
-
     return `
-        <div class="flex flex-col max-w-[85%] ${alignment} fade-in-up">
-            <div class="flex items-baseline gap-2 mb-1 ${isMe ? 'justify-end' : 'justify-start'} px-1">
-                <span class="text-[9px] font-black uppercase tracking-widest ${nameColor}">${msgObj.from}</span>
-                <span class="text-[8px] font-mono text-slate-500">${time}</span>
+        <div style="display:flex;flex-direction:column;align-items:${isMe ? 'flex-end' : 'flex-start'};" class="fade-up">
+            <div class="bubble-meta ${isMe ? 'bubble-me-meta' : ''}" style="margin-bottom:3px;">
+                <span style="color:${isMe ? '#6382ff' : '#b97cf3'};margin-right:4px;">${msgObj.from}</span>
+                <span>${time}</span>
             </div>
-            <div class="px-3 py-2 text-[11px] font-medium shadow-md ${bgColor} ${borderRadius} break-words leading-relaxed">
-                ${msgObj.text}
-            </div>
+            <div class="${isMe ? 'bubble-me' : 'bubble-them'}">${msgObj.text}</div>
         </div>
     `;
 }
@@ -769,7 +805,7 @@ window.zorgSocket.on('chat-history', (data) => {
     if (data.targetName !== activeChatTargetName) return;
     const container = document.getElementById('chatMessages');
     if (data.history.length === 0) {
-        container.innerHTML = '<div class="text-center text-[10px] text-slate-500 mt-4 font-mono italic">No recorded transmissions.</div>';
+        container.innerHTML = '<div style="text-align:center;padding:20px;font-family:\'Space Mono\',monospace;font-size:10px;color:#3d4260;font-style:italic;">No recorded transmissions.</div>';
     } else {
         container.innerHTML = data.history.map(renderMessageBubble).join('');
         container.scrollTop = container.scrollHeight;
@@ -777,16 +813,13 @@ window.zorgSocket.on('chat-history', (data) => {
 });
 
 window.zorgSocket.on('receive-private-msg', (msgObj) => {
-    // Render bubble if chat is open with this person
     if (activeChatTargetName && (msgObj.from === activeChatTargetName || (msgObj.from === zUsername && msgObj.to === activeChatTargetName))) {
         const container = document.getElementById('chatMessages');
         if (container.innerHTML.includes('No recorded transmissions')) container.innerHTML = '';
-
         container.insertAdjacentHTML('beforeend', renderMessageBubble(msgObj));
         container.scrollTop = container.scrollHeight;
     }
 
-    // Trigger notification ONLY if received from someone else
     if (msgObj.from !== zUsername) {
         try {
             const AudioContextConfig = window.AudioContext || window.webkitAudioContext;
@@ -804,17 +837,14 @@ window.zorgSocket.on('receive-private-msg', (msgObj) => {
         } catch (e) { }
 
         const safeName = msgObj.from.replace(/'/g, "\\'");
-        const toastHtml = `<span class="text-slate-400 text-[10px] block mb-1">Transmission from ${msgObj.from}: <i class="text-slate-500 lowercase">(Click to view)</i></span> <span class="text-white">${msgObj.text}</span>`;
 
         if (activeChatTargetName !== msgObj.from) {
-            showToast(toastHtml, 'whisper', `setChatTarget('${safeName}')`);
-
+            showToast(`<span style="color:#7c82a0;font-size:10px;font-family:'Space Mono',monospace;display:block;margin-bottom:3px;">From ${msgObj.from} · click to open</span>${msgObj.text}`, 'whisper', `setChatTarget('${safeName}')`);
             addNotification(`Message: ${msgObj.from}`, msgObj.text, false);
-
         }
 
         if (document.visibilityState === 'hidden' && "Notification" in window && Notification.permission === "granted") {
-            const notification = new Notification("ZORG-Ω Message", {
+            const notification = new Notification("ZORG-Ω", {
                 body: `${msgObj.from}: ${msgObj.text}`, icon: '/Icons/favicon.ico'
             });
             notification.onclick = function () { window.focus(); setChatTarget(safeName); this.close(); };
@@ -824,26 +854,27 @@ window.zorgSocket.on('receive-private-msg', (msgObj) => {
 
 function syncEngineUI() {
     const loader = document.getElementById('loader');
-    if (loader && !loader.classList.contains('hidden')) return;
+    if (loader && loader.style.display === 'flex') return;
 
     const m = document.getElementById('mode').value;
     const btn = document.getElementById('btn');
     if (activeEnginesMap[m] && activeEnginesMap[m].socketId !== window.zorgSocket.id) {
         btn.disabled = true;
-        btn.innerText = `ENGINE IN USE BY ${activeEnginesMap[m].startedBy.toUpperCase()}`;
-        btn.classList.add('opacity-50', 'cursor-not-allowed');
-        btn.classList.remove('hover:bg-blue-500', 'active:scale-95');
+        btn.innerText = `IN USE BY ${activeEnginesMap[m].startedBy.toUpperCase()}`;
+        btn.style.background = 'rgba(99,130,255,0.2)';
+        btn.style.cursor = 'not-allowed';
     } else {
         btn.disabled = false;
-        btn.innerText = 'EXECUTE ARCHITECT';
-        btn.classList.remove('opacity-50', 'cursor-not-allowed');
-        btn.classList.add('hover:bg-blue-500', 'active:scale-95');
+        btn.innerText = 'Execute Architect';
+        btn.style.background = '';
+        btn.style.cursor = '';
     }
 }
 
 window.zorgSocket.on('engine-registry-update', (engines) => {
     activeEnginesMap = engines;
     renderOnlineUsers();
+    renderEngineActivity();
     syncEngineUI();
 });
 
@@ -858,29 +889,32 @@ window.zorgSocket.on('online-users', (users) => {
 });
 
 // -- SYSTEM ADMIN LOGS --
+let isUserAdmin = false;
 
 function createUpdateHtml(u, idx) {
     const date = new Date(u.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    let color = "text-purple-400";
-    let bg = "bg-purple-900/10";
-    let border = "border-purple-500/20";
-    if (u.category === 'Alert') { color = "text-red-400"; bg = "bg-red-900/10"; border = "border-red-500/20"; }
-    if (u.category === 'Fix') { color = "text-emerald-400"; bg = "bg-emerald-900/10"; border = "border-emerald-500/20"; }
+
+    const configs = {
+        'Alert': { color: '#f87171', bg: 'rgba(248,113,113,0.05)', border: 'rgba(248,113,113,0.2)' },
+        'Fix': { color: '#3ecf8e', bg: 'rgba(62,207,142,0.05)', border: 'rgba(62,207,142,0.2)' },
+        'Update': { color: '#b97cf3', bg: 'rgba(185,124,243,0.05)', border: 'rgba(185,124,243,0.2)' }
+    };
+    const c = configs[u.category] || configs['Update'];
 
     const deleteBtn = isUserAdmin ? `
-        <button onclick="deleteSystemLog(${u.id})" class="absolute top-1.5 right-1.5 text-slate-500 hover:text-red-400 transition-colors p-1" title="Delete Log">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        <button onclick="deleteSystemLog(${u.id})" class="log-delete" title="Delete">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>` : '';
 
     return `
-        <div class="p-3 rounded-xl border ${border} ${bg} shadow-inner fade-in-up relative pr-7" id="log-${u.id}">
+        <div class="sys-log-item fade-up" id="log-${u.id}" style="background:${c.bg};border-color:${c.border};padding-right:28px;">
             ${deleteBtn}
-            <div class="flex justify-between items-center mb-1">
-                <span class="text-[9px] font-black uppercase tracking-widest ${color}">${u.category}</span>
-                <span class="text-[8px] font-mono text-slate-500 mr-2">${date}</span>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <span style="font-family:'Space Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:${c.color};">${u.category}</span>
+                <span style="font-family:'Space Mono',monospace;font-size:8px;color:#3d4260;">${date}</span>
             </div>
-            <p class="text-[11px] text-slate-300 font-medium leading-tight">${u.text}</p>
-            <div class="text-[8px] text-slate-500 font-bold uppercase tracking-widest mt-1.5 text-right">- ${u.author}</div>
+            <p style="font-size:11px;color:#b0b8d0;line-height:1.5;">${u.text}</p>
+            <div style="font-family:'Space Mono',monospace;font-size:8px;color:#3d4260;text-align:right;margin-top:4px;text-transform:uppercase;letter-spacing:0.1em;">— ${u.author}</div>
         </div>
     `;
 }
@@ -904,16 +938,13 @@ window.zorgSocket.on('delete-log', (id) => {
 
 function toggleAdminPanel() {
     const inputs = document.getElementById('adminUpdateInputs');
-
-    if (inputs.classList.contains('max-w-0')) {
-        // EXPAND THE PANEL
-        inputs.classList.remove('max-w-0', 'opacity-0');
-        inputs.classList.add('max-w-[560px]', 'opacity-100');
+    if (inputs.classList.contains('collapsed-width')) {
+        inputs.classList.remove('collapsed-width');
+        inputs.classList.add('expanded-width');
         setTimeout(() => document.getElementById('adminUpdateText').focus(), 300);
     } else {
-        // COLLAPSE THE PANEL
-        inputs.classList.remove('max-w-[560px]', 'opacity-100');
-        inputs.classList.add('max-w-0', 'opacity-0');
+        inputs.classList.remove('expanded-width');
+        inputs.classList.add('collapsed-width');
     }
 }
 
@@ -960,14 +991,9 @@ async function triggerGlobalRefresh() {
     }
 }
 
-// Listen for the Admin's command to refresh
 window.zorgSocket.on('execute-global-refresh', (timestamp) => {
-    // 1. Show a quick warning toast
-    showToast("Admin initiated global synchronization. Reloading...", "whisper");
-
-    // 2. Wait 1.5 seconds so they can read the toast, then forcefully bypass the cache
+    showToast("Admin initiated global sync. Reloading...", "whisper");
     setTimeout(() => {
-        // We append the timestamp to the URL to completely automate the ?v=X cache-busting!
         const currentUrl = new URL(window.location.href);
         currentUrl.searchParams.set('v', timestamp);
         window.location.href = currentUrl.toString();
@@ -988,27 +1014,27 @@ async function deleteSystemLog(logId) {
 }
 
 // -- NOTIFICATIONS SYSTEM --
+let unreadNotifs = 0;
 
 function toggleNotifications() {
     const panel = document.getElementById('notificationPanel');
-    const isOpen = panel.classList.contains('opacity-100');
+    const isOpen = panel.style.opacity === '1';
 
     if (isOpen) {
-        // Close — fade + shrink
-        panel.classList.remove('opacity-100', 'scale-100', 'pointer-events-auto');
-        panel.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+        panel.style.opacity = '0';
+        panel.style.transform = 'scale(0.95)';
+        panel.style.pointerEvents = 'none';
     } else {
-        // Open — fade + expand
-        panel.classList.remove('opacity-0', 'scale-95', 'pointer-events-none');
-        panel.classList.add('opacity-100', 'scale-100', 'pointer-events-auto');
-        // Clear the red badge when opened
+        panel.style.opacity = '1';
+        panel.style.transform = 'scale(1)';
+        panel.style.pointerEvents = 'auto';
         unreadNotifs = 0;
         document.getElementById('notifBadge').classList.add('hidden');
     }
 }
 
 function clearNotifications() {
-    document.getElementById('notificationList').innerHTML = '<div class="text-center p-4 text-[10px] font-mono italic text-slate-600 pointer-events-none">No active alerts.</div>';
+    document.getElementById('notificationList').innerHTML = '<div style="text-align:center;padding:20px;color:#3d4260;font-family:\'Space Mono\',monospace;font-size:10px;">No active alerts.</div>';
     unreadNotifs = 0;
     document.getElementById('notifBadge').classList.add('hidden');
 }
@@ -1017,65 +1043,71 @@ function addNotification(title, message, isError = false) {
     const list = document.getElementById('notificationList');
     const badge = document.getElementById('notifBadge');
 
-    // Remove empty state if present
     if (list.innerHTML.includes('No active alerts')) list.innerHTML = '';
 
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const colorClass = isError ? 'text-red-400' : 'text-blue-400';
-    const borderClass = isError ? 'border-red-900/30 bg-red-900/10' : 'border-blue-900/30 bg-blue-900/10';
+    const color = isError ? '#f87171' : '#6382ff';
+    const border = isError ? 'rgba(248,113,113,0.2)' : 'rgba(99,130,255,0.2)';
+    const bg = isError ? 'rgba(248,113,113,0.04)' : 'rgba(99,130,255,0.04)';
 
     const notifHtml = `
-        <div class="p-3 rounded-xl border ${borderClass} shadow-inner fade-in-up">
-            <div class="flex justify-between items-start mb-1">
-                <span class="text-[10px] font-black uppercase tracking-widest ${colorClass}">${title}</span>
-                <span class="text-[8px] font-mono text-slate-500">${time}</span>
+        <div class="notif-item fade-up" style="background:${bg};border-color:${border};">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px;">
+                <span style="font-family:'Space Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:${color};">${title}</span>
+                <span style="font-family:'Space Mono',monospace;font-size:8px;color:#3d4260;">${time}</span>
             </div>
-            <p class="text-[11px] text-slate-300 font-medium leading-tight">${message}</p>
+            <p style="font-size:11px;color:#b0b8d0;line-height:1.5;">${message}</p>
         </div>
     `;
 
     list.insertAdjacentHTML('afterbegin', notifHtml);
 
-    // Ping the red badge
     unreadNotifs++;
     badge.classList.remove('hidden');
 }
 
-// Close panel if clicked outside
+
+// Close notification panel if clicked outside
 document.addEventListener('click', function (event) {
     const widget = document.getElementById('notificationWidget');
     const panel = document.getElementById('notificationPanel');
-    if (widget && !widget.contains(event.target) && panel.classList.contains('opacity-100')) {
-        panel.classList.remove('opacity-100', 'scale-100', 'pointer-events-auto');
-        panel.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+    if (widget && !widget.contains(event.target) && panel && panel.style.opacity === '1') {
+        panel.style.opacity = '0';
+        panel.style.transform = 'scale(0.95)';
+        panel.style.pointerEvents = 'none';
     }
 });
 
 // -- BULLETIN BOARD SYSTEM --
+let selectedBulletinFile = null;
+
+function linkify(text) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(urlRegex, function (url) {
+        return `<a href="${url}" target="_blank" style="color:#6382ff;text-decoration:underline;word-break:break-all;" onmouseover="this.style.color='#7b97ff'" onmouseout="this.style.color='#6382ff'">${url}</a>`;
+    });
+}
 
 function toggleBulletinInput() {
     const container = document.getElementById('bulletinInputContainer');
-    container.classList.toggle('hidden');
-    container.classList.toggle('flex');
-    if (!container.classList.contains('hidden')) {
-        document.getElementById('bulletinTextInput').focus();
-    }
+    const isHidden = container.style.display === 'none' || container.style.display === '';
+    container.style.display = isHidden ? 'flex' : 'none';
+    if (isHidden) document.getElementById('bulletinTextInput').focus();
 }
 
 function handleBulletinFileSelect(input) {
     if (input.files && input.files[0]) {
         selectedBulletinFile = input.files[0];
         document.getElementById('bulletinFileName').innerText = selectedBulletinFile.name;
-        document.getElementById('bulletinFilePreview').classList.remove('hidden');
-        document.getElementById('bulletinFilePreview').classList.add('flex');
+        document.getElementById('bulletinFilePreview').style.display = 'flex';
     }
 }
 
 function removeBulletinFile() {
     selectedBulletinFile = null;
     document.getElementById('bulletinFileInput').value = '';
-    document.getElementById('bulletinFilePreview').classList.add('hidden');
-    document.getElementById('bulletinFilePreview').classList.remove('flex');
+    document.getElementById('bulletinFilePreview').style.display = 'none';
+    document.getElementById('bulletinFileName').innerText = '';
 }
 
 async function submitBulletin() {
@@ -1087,7 +1119,7 @@ async function submitBulletin() {
 
     btn.disabled = true;
     btn.innerText = "UPLOADING...";
-    btn.classList.add('opacity-50');
+    btn.style.opacity = '0.5';
 
     let fileUrl = null;
     let fileName = null;
@@ -1108,10 +1140,8 @@ async function submitBulletin() {
             fileName = data.originalName;
         }
 
-        // Package everything together and send to server
         window.zorgSocket.emit('add-bulletin', { text: text, fileUrl: fileUrl, fileName: fileName });
 
-        // Clean up UI
         textInput.value = '';
         removeBulletinFile();
         toggleBulletinInput();
@@ -1121,68 +1151,68 @@ async function submitBulletin() {
     } finally {
         btn.disabled = false;
         btn.innerText = "Push to Board";
-        btn.classList.remove('opacity-50');
+        btn.style.opacity = '1';
     }
 }
 
-function deleteBulletin(id) {
-    window.zorgSocket.emit('delete-bulletin', id);
-}
 
-// Automatically detect URLs and make them clickable
-function linkify(text) {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return text.replace(urlRegex, function (url) {
-        return `<a href="${url}" target="_blank" class="text-blue-400 underline hover:text-blue-300 pointer-events-auto break-all">${url}</a>`;
-    });
+function deleteBulletin(id) {
+    // Client-side guard: only emit if it's your pin or you're admin
+    const pinEl = document.getElementById('pin-' + id);
+    const btn = pinEl ? pinEl.querySelector('.delete-btn') : null;
+    const author = btn ? btn.getAttribute('data-author') : null;
+
+    if (!isUserAdmin && author && author !== zUsername) {
+        showToast("You can only delete your own pins.", "error");
+        return;
+    }
+    window.zorgSocket.emit('delete-bulletin', id);
 }
 
 function createBulletinHtml(pin) {
     const date = new Date(pin.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
     const time = new Date(pin.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const canDelete = isUserAdmin || pin.author === zUsername;
-    const deleteBtn = canDelete ? `
-        <button onclick="deleteBulletin(${pin.id})" class="absolute top-2 right-2 text-slate-500 hover:text-red-400 transition-colors pointer-events-auto" title="Delete Pin">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>` : '';
+    // Always render the delete button — server enforces permission.
+    // We store the author on the element so we can show/hide it purely via CSS
+    // once zUsername is known (re-render is not needed).
+    const deleteBtn = `
+        <button onclick="deleteBulletin(${pin.id})" class="delete-btn" data-author="${pin.author}" title="Delete Pin">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>`;
 
     let fileHtml = '';
-    // This is the part your browser was missing!
     if (pin.fileUrl) {
         const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(pin.fileName);
-
         if (isImage) {
             fileHtml = `
-                <div class="mt-2 rounded-lg overflow-hidden border border-slate-700/50 shadow-md pointer-events-auto">
-                    <a href="${pin.fileUrl}" target="_blank" title="Click to view full size">
-                        <img src="${pin.fileUrl}" alt="${pin.fileName}" class="w-full max-h-48 object-cover hover:opacity-80 transition-opacity">
+                <div style="margin-top:8px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.07);">
+                    <a href="${pin.fileUrl}" target="_blank">
+                        <img src="${pin.fileUrl}" alt="${pin.fileName}" style="width:100%;max-height:160px;object-fit:cover;display:block;transition:opacity 0.15s;" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">
                     </a>
-                </div>
-            `;
+                </div>`;
         } else {
             fileHtml = `
-                <a href="${pin.fileUrl}" target="_blank" download="${pin.fileName}" class="mt-2 flex items-center gap-2 bg-slate-900 border border-slate-700 hover:border-amber-500/50 p-2 rounded-lg group transition-colors pointer-events-auto shadow-inner">
-                    <div class="bg-amber-500/20 text-amber-400 p-1.5 rounded-md group-hover:bg-amber-500 group-hover:text-white transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                <a href="${pin.fileUrl}" target="_blank" download="${pin.fileName}" style="margin-top:8px;display:flex;align-items:center;gap:8px;background:rgba(8,9,13,0.5);border:1px solid rgba(245,166,35,0.15);border-radius:8px;padding:8px 10px;text-decoration:none;transition:border-color 0.15s;" onmouseover="this.style.borderColor='rgba(245,166,35,0.4)'" onmouseout="this.style.borderColor='rgba(245,166,35,0.15)'">
+                    <div style="background:rgba(245,166,35,0.15);border-radius:6px;padding:6px;color:#f5a623;flex-shrink:0;transition:background 0.15s;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                     </div>
-                    <div class="flex-1 min-w-0">
-                        <p class="text-[10px] font-bold text-slate-300 truncate">${pin.fileName}</p>
-                        <p class="text-[8px] text-slate-500 uppercase tracking-widest">Click to Download</p>
+                    <div style="min-width:0;">
+                        <div style="font-size:10px;font-weight:600;color:#e8eaf0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pin.fileName}</div>
+                        <div style="font-family:'Space Mono',monospace;font-size:8px;color:#7c82a0;text-transform:uppercase;letter-spacing:0.1em;margin-top:1px;">Click to Download</div>
                     </div>
-                </a>
-            `;
+                </a>`;
         }
     }
 
-    const textHtml = pin.text ? `<p class="text-xs text-slate-200 font-medium leading-relaxed whitespace-pre-wrap mt-1">${linkify(pin.text)}</p>` : '';
+    const textHtml = pin.text ? `<p style="font-size:12px;color:#b0b8d0;line-height:1.6;margin-top:4px;white-space:pre-wrap;word-break:break-word;">${linkify(pin.text)}</p>` : '';
 
     return `
-        <div class="relative p-3 rounded-xl border border-amber-500/20 bg-amber-900/10 shadow-inner fade-in-up group pr-6" id="pin-${pin.id}">
+        <div class="pin-card fade-up" id="pin-${pin.id}" style="padding-right:24px;">
             ${deleteBtn}
-            <div class="flex items-baseline gap-2 mb-1.5">
-                <span class="text-[9px] font-black uppercase tracking-widest text-amber-500">${pin.author}</span>
-                <span class="text-[8px] font-mono text-slate-500">${date} - ${time}</span>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;">
+                <span style="font-family:'Space Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#f5a623;">${pin.author}</span>
+                <span style="font-family:'Space Mono',monospace;font-size:8px;color:#3d4260;">${date} · ${time}</span>
             </div>
             ${textHtml}
             ${fileHtml}
@@ -1193,11 +1223,10 @@ function createBulletinHtml(pin) {
 // Listen for new pins
 window.zorgSocket.on('new-bulletin', (pin) => {
     const list = document.getElementById('bulletinList');
-    if (list) list.insertAdjacentHTML('afterbegin', createBulletinHtml(pin));
+    list.insertAdjacentHTML('afterbegin', createBulletinHtml(pin));
 
-    // Notify if we didn't write it
     if (pin.author !== zUsername) {
-        addNotification('New Notice Pinned', `By ${pin.author}: ${(pin.text || '').substring(0, 30)}...`, false);
+        addNotification('New Notice Pinned', `By ${pin.author}: ${(pin.text || '').substring(0, 40)}`, false);
     }
 });
 
