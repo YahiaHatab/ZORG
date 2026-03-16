@@ -644,6 +644,11 @@ io.on('connection', (socket) => {
         const sender = activeUsers[socket.id];
         if (!sender || !data) return;
 
+        // Admin only
+        const userEntry = savedUsers[ip];
+        const isUserAdmin = userEntry && typeof userEntry === 'object' && userEntry.role === 'admin';
+        if (!isUserAdmin) return;
+
         // Safely extract text to prevent server crashes if it's empty
         const safeText = (data.text || '').trim();
 
@@ -698,7 +703,8 @@ io.on('connection', (socket) => {
     });
 
     if (uName) {
-        activeUsers[socket.id] = { id: socket.id, name: uName, ip: ip, status: 'online' };
+        const savedColor = (savedUsers[ip] && typeof savedUsers[ip] === 'object') ? savedUsers[ip].avatarColor || null : null;
+        activeUsers[socket.id] = { id: socket.id, name: uName, ip: ip, status: 'online', avatarColor: savedColor, scrapeCount: 0, viewing: null };
         io.emit('online-users', Object.values(activeUsers));
     } else {
         socket.emit('request-name');
@@ -710,7 +716,7 @@ io.on('connection', (socket) => {
         savedUsers[ip] = { name: cleanName, role: 'user' };
         fs.writeFileSync(usersFile, JSON.stringify(savedUsers, null, 2));
 
-        activeUsers[socket.id] = { id: socket.id, name: cleanName, ip: ip, status: 'online' };
+        activeUsers[socket.id] = { id: socket.id, name: cleanName, ip: ip, status: 'online', avatarColor: null, scrapeCount: 0, viewing: null };
         io.emit('online-users', Object.values(activeUsers));
 
         socket.emit('init-data', {
@@ -750,6 +756,50 @@ io.on('connection', (socket) => {
         if (activeUsers[socket.id]) {
             activeUsers[socket.id].status = status;
             io.emit('online-users', Object.values(activeUsers));
+        }
+    });
+
+    socket.on('update-avatar-color', (color) => {
+        if (activeUsers[socket.id] && /^#[0-9a-fA-F]{6}$/.test(color)) {
+            activeUsers[socket.id].avatarColor = color;
+            // Persist color to user record
+            if (savedUsers[ip] && typeof savedUsers[ip] === 'object') {
+                savedUsers[ip].avatarColor = color;
+                fs.writeFileSync(usersFile, JSON.stringify(savedUsers, null, 2));
+            }
+            io.emit('online-users', Object.values(activeUsers));
+        }
+    });
+
+    socket.on('update-scrape-count', (count) => {
+        if (activeUsers[socket.id]) {
+            activeUsers[socket.id].scrapeCount = parseInt(count) || 0;
+            io.emit('online-users', Object.values(activeUsers));
+        }
+    });
+
+    socket.on('update-viewing', (engineName) => {
+        if (activeUsers[socket.id]) {
+            activeUsers[socket.id].viewing = engineName || null;
+            io.emit('online-users', Object.values(activeUsers));
+        }
+    });
+
+    socket.on('typing-start', ({ targetName }) => {
+        const sender = activeUsers[socket.id];
+        if (!sender) return;
+        const targetUser = Object.values(activeUsers).find(u => u.name === targetName);
+        if (targetUser) {
+            io.to(targetUser.id).emit('user-typing', { from: sender.name });
+        }
+    });
+
+    socket.on('typing-stop', ({ targetName }) => {
+        const sender = activeUsers[socket.id];
+        if (!sender) return;
+        const targetUser = Object.values(activeUsers).find(u => u.name === targetName);
+        if (targetUser) {
+            io.to(targetUser.id).emit('user-stopped-typing', { from: sender.name });
         }
     });
 

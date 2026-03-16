@@ -364,6 +364,7 @@
     background: rgba(255, 255, 255, 0.02);
     transition: all 0.15s;
     cursor: pointer;
+    position: relative;
 }
 
 .user-card:hover {
@@ -381,20 +382,56 @@
     background: rgba(99, 130, 255, 0.06);
 }
 
-.user-avatar {
-    width: 30px;
-    height: 30px;
+/* Scrape count tooltip */
+.user-tooltip {
+    position: absolute;
+    right: 36px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: 8px;
-    background: linear-gradient(135deg, rgba(99, 130, 255, 0.2), rgba(185, 124, 243, 0.2));
-    border: 1px solid rgba(99, 130, 255, 0.2);
+    padding: 4px 9px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+}
+
+.user-card:hover .user-tooltip {
+    opacity: 1;
+}
+
+/* Avatar edit hint */
+.user-avatar-wrap {
+    position: relative;
+}
+
+.avatar-edit-hint {
+    position: absolute;
+    inset: 0;
+    border-radius: 9px;
+    background: rgba(0, 0, 0, 0.55);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 800;
-    font-size: 11px;
-    color: #6382ff;
-    flex-shrink: 0;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.user-avatar-wrap:hover .avatar-edit-hint {
+    opacity: 1;
+}
+
+.user-avatar-wrap:hover>div:first-child {
+    filter: brightness(0.7);
 }
 
 /* ---- NOTIFICATION ITEMS ---- */
