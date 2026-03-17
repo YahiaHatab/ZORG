@@ -978,7 +978,7 @@ async function run() {
                 }
             }
         } catch (e) { }
-    }, 1500);
+    }, 800);
 
     try {
         abortController = new AbortController();
@@ -1235,31 +1235,62 @@ function renderOnlineUsers() {
             </div>
         `;
     }).join('');
-    renderEngineActivity();
+    // renderEngineActivity is intentionally NOT called here.
+    // It is only triggered by engine-registry-update — the one event
+    // that actually changes engine state. Calling it here caused it to
+    // fire on every presence ping (away/online, viewing, scrape count).
 }
+
+// Shared interval that only patches the elapsed timer text nodes —
+// avoids full innerHTML rebuilds every tick while engines are running.
+let _engineTimerInterval = null;
 
 function renderEngineActivity() {
     const listEl = document.getElementById('engineActivityList');
     if (!listEl) return;
+
+    // Always clear the existing timer — we'll restart it only if needed
+    if (_engineTimerInterval) {
+        clearInterval(_engineTimerInterval);
+        _engineTimerInterval = null;
+    }
+
     const engines = Object.values(activeEnginesMap);
     if (engines.length === 0) {
         listEl.innerHTML = '<div style="text-align:center;padding:12px;color:#3d4260;font-family:\'Space Mono\',monospace;font-size:10px;">All engines idle.</div>';
         return;
     }
+
+    // Build the full HTML once per engine-registry-update
     listEl.innerHTML = engines.map(e => {
         const elapsed = Math.floor((Date.now() - e.startTime) / 1000);
         const mins = Math.floor(elapsed / 60);
         const secs = elapsed % 60;
+        const timerId = `engine-timer-${e.socketId || e.mode}`;
         return `
             <div class="engine-active-item">
                 <div style="width:6px;height:6px;border-radius:50%;background:#f97316;box-shadow:0 0 6px rgba(249,115,22,0.7);flex-shrink:0;margin-top:3px;animation:pulse-glow 1.5s infinite;"></div>
                 <div style="flex:1;min-width:0;">
                     <div style="font-size:11px;font-weight:600;color:#f97316;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.engineName || e.mode}</div>
-                    <div style="font-family:'Space Mono',monospace;font-size:9px;color:#7c82a0;margin-top:2px;">${e.startedBy} · ${mins}m ${secs}s</div>
+                    <div style="font-family:'Space Mono',monospace;font-size:9px;color:#7c82a0;margin-top:2px;">${e.startedBy} · <span id="${timerId}">${mins}m ${secs}s</span></div>
                 </div>
             </div>
         `;
     }).join('');
+
+    // Single shared interval — only patches the <span> timer text nodes,
+    // not the entire list. Cheap text node writes instead of full DOM rebuilds.
+    _engineTimerInterval = setInterval(() => {
+        if (document.visibilityState !== 'visible') return;
+        engines.forEach(e => {
+            const el = document.getElementById(`engine-timer-${e.socketId || e.mode}`);
+            if (!el) return;
+            const elapsed = Math.floor((Date.now() - e.startTime) / 1000);
+            const mins = Math.floor(elapsed / 60);
+            const secs = elapsed % 60;
+            el.textContent = `${mins}m ${secs}s`;
+        });
+    }, 1000);
 }
 
 let activeChatTargetName = null;
@@ -1979,3 +2010,76 @@ window.zorgSocket.on('init-data', () => {
 // Initial render on page load
 syncHomeStats();
 renderHomeRecentEngines();
+// =============================================
+// SERVER RESOURCE PULSE — Fix 8 included
+// Polls /api/health every 3s, pauses when tab
+// is hidden so background tabs cost nothing.
+// =============================================
+(function initServerPulse() {
+    const POLL_INTERVAL = 3000;
+
+    const orb         = document.getElementById('pulseOrb');
+    const statusLabel = document.getElementById('pulseStatusLabel');
+    const loadPct     = document.getElementById('pulseLoadPct');
+    const bar         = document.getElementById('pulseBar');
+    const cpuEl       = document.getElementById('pulseCpu');
+    const memEl       = document.getElementById('pulseMem');
+    const activeEl    = document.getElementById('pulseActive');
+    const safeHint    = document.getElementById('pulseSafeHint');
+    const warnHint    = document.getElementById('pulseWarnHint');
+
+    if (!orb) return;
+
+    function applyState(data) {
+        const pct     = Math.round(data.load * 100);
+        const cpuPct  = Math.round(data.loadCpu * 100);
+        const memPct  = Math.round(data.loadMem * 100);
+        const scrapes = data.activeScrapes || 0;
+
+        let tier, label, barColor;
+        if (data.load < 0.5) {
+            tier = 'idle';     label = 'IDLE';     barColor = '#3ecf8e';
+        } else if (data.load < 0.8) {
+            tier = 'busy';     label = 'BUSY';     barColor = '#f5a623';
+        } else {
+            tier = 'critical'; label = 'OVERLOAD'; barColor = '#f87171';
+        }
+
+        orb.className            = `pulse-orb pulse-orb--${tier}`;
+        statusLabel.innerText    = label;
+        statusLabel.style.color  = barColor;
+        loadPct.innerText        = pct + '%';
+        loadPct.style.color      = barColor;
+        cpuEl.innerText          = cpuPct + '%';
+        memEl.innerText          = memPct + '%';
+        activeEl.innerText       = scrapes + (scrapes === 1 ? ' scrape' : ' scrapes');
+        activeEl.style.color     = scrapes > 0 ? '#f97316' : 'var(--text-secondary)';
+        bar.style.width          = Math.min(pct, 100) + '%';
+        bar.style.background     = barColor;
+
+        const isSafe = tier === 'idle' && scrapes === 0;
+        safeHint.style.display   = isSafe             ? 'flex' : 'none';
+        warnHint.style.display   = tier === 'critical' ? 'flex' : 'none';
+    }
+
+    async function poll() {
+        try {
+            const res  = await fetch('/api/health');
+            const data = await res.json();
+            applyState(data);
+        } catch (e) {
+            if (statusLabel) statusLabel.innerText = 'OFFLINE';
+            if (orb) orb.className = 'pulse-orb pulse-orb--critical';
+        }
+    }
+
+    // FIX 8: pause polling when tab is hidden, resume + immediate poll on return
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') poll();
+    });
+
+    poll();
+    setInterval(() => {
+        if (document.visibilityState === 'visible') poll();
+    }, POLL_INTERVAL);
+})();
