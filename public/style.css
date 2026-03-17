@@ -1,136 +1,109 @@
 /* ============================================
    ZORG-Ω Architect — Design System v6.0
    ============================================ */
-
 /* Scrollbar reset for all themed scroll areas */
 .scroll::-webkit-scrollbar {
     width: 4px;
     height: 4px;
 }
-
 .scroll::-webkit-scrollbar-track {
     background: transparent;
 }
-
 .scroll::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.07);
     border-radius: 99px;
 }
-
 .scroll::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.15);
 }
-
 /* Telemetry scrollbar */
 #telemetry::-webkit-scrollbar {
     width: 4px;
 }
-
 #telemetry::-webkit-scrollbar-track {
     background: transparent;
 }
-
 #telemetry::-webkit-scrollbar-thumb {
     background: #1a2e20;
     border-radius: 99px;
 }
-
 /* ---- ANIMATIONS ---- */
 @keyframes dotBounce {
-
     0%,
     80%,
     100% {
         transform: scale(0.4);
         opacity: 0.3;
     }
-
     40% {
         transform: scale(1);
         opacity: 1;
     }
 }
-
 @keyframes fadeUp {
     from {
         opacity: 0;
         transform: translateY(8px);
     }
-
     to {
         opacity: 1;
         transform: translateY(0);
     }
 }
-
 @keyframes fadeIn {
     from {
         opacity: 0;
     }
-
     to {
         opacity: 1;
     }
 }
-
 @keyframes pulse-glow {
-
     0%,
     100% {
         opacity: 1;
     }
-
     50% {
         opacity: 0.45;
     }
 }
-
 @keyframes highlightPulse {
     0% {
         border-color: rgba(255, 255, 255, 0.07);
         box-shadow: none;
     }
-
     30% {
         border-color: rgba(185, 124, 243, 0.8);
         box-shadow: 0 0 20px rgba(185, 124, 243, 0.25);
     }
-
     100% {
         border-color: rgba(255, 255, 255, 0.07);
         box-shadow: none;
     }
 }
-
 @keyframes slideIn {
     from {
         transform: translateX(16px);
         opacity: 0;
     }
-
     to {
         transform: translateX(0);
         opacity: 1;
     }
 }
-
 /* ---- UTILITY ---- */
 .fade-up {
     animation: fadeUp 0.35s ease forwards;
 }
-
 .fade-in {
     animation: fadeIn 0.25s ease forwards;
 }
-
 .slide-in {
     animation: slideIn 0.3s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
 }
-
 .highlight-pulse {
     animation: highlightPulse 2.5s ease-out;
 }
-
 /* Dots */
 .dot {
     display: inline-block;
@@ -140,15 +113,12 @@
     border-radius: 50%;
     animation: dotBounce 1.4s infinite ease-in-out both;
 }
-
 .dot1 {
     animation-delay: -0.32s;
 }
-
 .dot2 {
     animation-delay: -0.16s;
 }
-
 /* Status dots */
 .status-dot {
     width: 7px;
@@ -156,23 +126,19 @@
     border-radius: 50%;
     flex-shrink: 0;
 }
-
 .status-online {
     background: #3ecf8e;
     box-shadow: 0 0 6px rgba(62, 207, 142, 0.7);
     animation: pulse-glow 2s infinite;
 }
-
 .status-away {
     background: #f5a623;
 }
-
 .status-busy {
     background: #f97316;
     box-shadow: 0 0 6px rgba(249, 115, 22, 0.7);
     animation: pulse-glow 1.5s infinite;
 }
-
 /* ---- DROPDOWN ENGINE ITEMS ---- */
 .dropdown-engine-item {
     padding: 10px 16px 10px 20px;
@@ -187,22 +153,18 @@
     transition: background 0.12s;
     gap: 8px;
 }
-
 .dropdown-engine-item:hover {
     background: rgba(255, 255, 255, 0.04);
 }
-
 .dropdown-engine-item .action-btns {
     display: flex;
     gap: 4px;
     opacity: 0;
     transition: opacity 0.15s;
 }
-
 .dropdown-engine-item:hover .action-btns {
     opacity: 1;
 }
-
 .cat-header {
     background: #0e1018;
     padding: 8px 14px;
@@ -213,11 +175,9 @@
     transition: background 0.15s;
     user-select: none;
 }
-
 .cat-header:hover {
     background: #181c28;
 }
-
 .cat-header .cat-label {
     font-family: 'Space Mono', monospace;
     font-size: 9px;
@@ -227,20 +187,16 @@
     color: #3d4260;
     transition: color 0.15s;
 }
-
 .cat-header:hover .cat-label {
     color: #7c82a0;
 }
-
 .cat-chevron {
     transition: transform 0.2s ease;
     color: #3d4260;
 }
-
 .cat-chevron.open {
     transform: rotate(180deg);
 }
-
 /* ---- BULLETIN PINS ---- */
 .pin-card {
     background: linear-gradient(135deg, rgba(245, 166, 35, 0.05) 0%, transparent 60%);
@@ -250,11 +206,9 @@
     position: relative;
     transition: border-color 0.2s;
 }
-
 .pin-card:hover {
     border-color: rgba(245, 166, 35, 0.3);
 }
-
 .pin-card .delete-btn {
     position: absolute;
     top: 8px;
@@ -273,16 +227,13 @@
     transition: opacity 0.15s, color 0.15s;
     z-index: 10;
 }
-
 .pin-card:hover .delete-btn {
     opacity: 1;
 }
-
 .pin-card .delete-btn:hover {
     color: #f87171;
     background: rgba(248, 113, 113, 0.1);
 }
-
 /* ---- CHAT BUBBLES ---- */
 .bubble-me {
     background: #6382ff;
@@ -295,7 +246,6 @@
     line-height: 1.5;
     word-break: break-word;
 }
-
 .bubble-them {
     background: #181c28;
     border: 1px solid rgba(255, 255, 255, 0.07);
@@ -308,7 +258,6 @@
     line-height: 1.5;
     word-break: break-word;
 }
-
 .bubble-meta {
     font-family: 'Space Mono', monospace;
     font-size: 8px;
@@ -317,11 +266,9 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
 }
-
 .bubble-me-meta {
     text-align: right;
 }
-
 /* ---- SYSTEM LOG ITEMS ---- */
 .sys-log-item {
     padding: 10px 12px;
@@ -330,7 +277,6 @@
     position: relative;
     transition: opacity 0.2s;
 }
-
 .sys-log-item .log-delete {
     position: absolute;
     top: 7px;
@@ -344,15 +290,12 @@
     transition: opacity 0.15s, color 0.15s;
     padding: 2px;
 }
-
 .sys-log-item:hover .log-delete {
     opacity: 1;
 }
-
 .sys-log-item .log-delete:hover {
     color: #f87171;
 }
-
 /* ---- ONLINE USER CARDS ---- */
 .user-card {
     display: flex;
@@ -366,22 +309,18 @@
     cursor: pointer;
     position: relative;
 }
-
 .user-card:hover {
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.12);
 }
-
 .user-card.is-me {
     border-color: rgba(99, 130, 255, 0.2);
     background: rgba(99, 130, 255, 0.04);
     cursor: default;
 }
-
 .user-card.is-me:hover {
     background: rgba(99, 130, 255, 0.06);
 }
-
 /* Scrape count tooltip */
 .user-tooltip {
     position: absolute;
@@ -403,16 +342,13 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
     z-index: 10;
 }
-
 .user-card:hover .user-tooltip {
     opacity: 1;
 }
-
 /* Avatar edit hint */
 .user-avatar-wrap {
     position: relative;
 }
-
 .avatar-edit-hint {
     position: absolute;
     inset: 0;
@@ -425,15 +361,12 @@
     opacity: 0;
     transition: opacity 0.15s;
 }
-
 .user-avatar-wrap:hover .avatar-edit-hint {
     opacity: 1;
 }
-
 .user-avatar-wrap:hover>div:first-child {
     filter: brightness(0.7);
 }
-
 /* ---- NOTIFICATION ITEMS ---- */
 .notif-item {
     padding: 10px 12px;
@@ -441,28 +374,23 @@
     border: 1px solid;
     margin-bottom: 6px;
 }
-
 .notif-item:last-child {
     margin-bottom: 0;
 }
-
 /* ---- COLLAPSIBLE ---- */
 .collapsible {
     overflow: hidden;
     transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
     white-space: nowrap;
 }
-
 .collapsed-width {
     max-width: 0;
     opacity: 0;
 }
-
 .expanded-width {
     max-width: 680px;
     opacity: 1;
 }
-
 /* ---- TOGGLE SWITCH ---- */
 .toggle-switch {
     width: 32px;
@@ -475,7 +403,6 @@
     transition: background 0.2s, border-color 0.2s;
     flex-shrink: 0;
 }
-
 .toggle-switch::after {
     content: '';
     position: absolute;
@@ -487,17 +414,14 @@
     border-radius: 50%;
     transition: transform 0.2s, background 0.2s;
 }
-
 .toggle-switch.active {
     background: rgba(185, 124, 243, 0.15);
     border-color: rgba(185, 124, 243, 0.5);
 }
-
 .toggle-switch.active::after {
     transform: translateX(14px);
     background: #b97cf3;
 }
-
 /* ---- ENGINE ACTIVITY ITEMS ---- */
 .engine-active-item {
     padding: 8px 10px;
@@ -508,7 +432,6 @@
     align-items: flex-start;
     gap: 8px;
 }
-
 /* ---- TOAST ---- */
 .toast-content-title {
     font-family: 'Space Mono', monospace;
@@ -518,20 +441,17 @@
     text-transform: uppercase;
     margin-bottom: 3px;
 }
-
 .toast-content-msg {
     font-size: 12px;
     font-weight: 500;
     line-height: 1.5;
     color: #e8eaf0;
 }
-
 /* ---- RESPONSIVE ---- */
 @media (max-width: 1100px) {
     body>.z-content>div[style*="grid-template-columns"] {
         grid-template-columns: 1fr !important;
     }
-
     aside {
         height: auto !important;
         position: static !important;
@@ -540,13 +460,11 @@
         border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     }
 }
-
 /* ---- MISC ---- */
 ::selection {
     background: rgba(99, 130, 255, 0.3);
     color: #fff;
 }
-
 /* Prevent layout shift on modal open */
 body.modal-open {
     overflow: hidden;
@@ -556,7 +474,39 @@ body.modal-open {
     from { transform: scale(0.4); opacity: 0; }
     to   { transform: scale(1);   opacity: 1; }
 }
-
 .unread-badge {
     animation: unreadPop 0.2s cubic-bezier(0.34, 1.6, 0.64, 1) forwards;
+}
+
+/* ---- SERVER RESOURCE PULSE ---- */
+@keyframes pulseOrbIdle {
+    0%, 100% { opacity: 0.5; transform: scale(0.85); }
+    50%       { opacity: 1;   transform: scale(1); }
+}
+@keyframes pulseOrbBusy {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.5); transform: scale(1); }
+    50%       { opacity: 1; box-shadow: 0 0 0 4px rgba(245, 166, 35, 0); transform: scale(1.1); }
+}
+@keyframes pulseOrbCritical {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.6); transform: scale(1); }
+    50%       { opacity: 1; box-shadow: 0 0 0 5px rgba(248, 113, 113, 0); transform: scale(1.15); }
+}
+.pulse-orb {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: background 0.4s ease;
+}
+.pulse-orb--idle {
+    background: #3ecf8e;
+    animation: pulseOrbIdle 2.4s ease-in-out infinite;
+}
+.pulse-orb--busy {
+    background: #f5a623;
+    animation: pulseOrbBusy 1.2s ease-in-out infinite;
+}
+.pulse-orb--critical {
+    background: #f87171;
+    animation: pulseOrbCritical 0.8s ease-in-out infinite;
 }

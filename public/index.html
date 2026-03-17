@@ -292,7 +292,6 @@
 
         /* Dots loader */
         @keyframes dotBounce {
-
             0%,
             80%,
             100% {
@@ -365,7 +364,6 @@
         }
 
         @keyframes pulse-glow {
-
             0%,
             100% {
                 opacity: 1;
@@ -522,9 +520,11 @@
             from { opacity: 0; transform: translateY(16px); }
             to   { opacity: 1; transform: translateY(0); }
         }
+
         .home-in {
             animation: homeIn 0.4s ease forwards;
         }
+
         .view-hidden {
             display: none !important;
         }
@@ -541,16 +541,19 @@
             transition: border-color 0.2s, transform 0.2s;
             cursor: default;
         }
+
         .stat-card:hover {
             border-color: rgba(255,255,255,0.13);
             transform: translateY(-2px);
         }
+
         .stat-value {
             font-family: var(--font-display);
             font-size: 38px;
             letter-spacing: 0.04em;
             line-height: 1;
         }
+
         .stat-label {
             font-family: var(--font-mono);
             font-size: 9px;
@@ -571,6 +574,7 @@
             cursor: pointer;
             transition: background 0.15s, border-color 0.15s, transform 0.15s;
         }
+
         .engine-quick-item:hover {
             background: var(--bg-raised);
             border-color: rgba(99,130,255,0.3);
@@ -594,6 +598,7 @@
             margin-bottom: 20px;
             transition: color 0.15s;
         }
+
         .back-btn:hover { color: var(--accent); }
 
         /* Collapsed width anim */
@@ -836,14 +841,11 @@
                 style="font-family:var(--font-display);font-size:22px;letter-spacing:0.08em;color:var(--text-primary);">ZORG-Ω</span>
             <span class="section-label" style="color:var(--text-muted);">Architect v6.0</span>
         </div>
-
         <!-- Engine count -->
         <div style="margin-left:8px;">
             <span class="count-badge">CORES: <span id="engineCountBadge">0</span></span>
         </div>
-
         <div style="flex:1;"></div>
-
         <!-- Profile (hidden until logged in) -->
         <div id="userProfile" style="display:none;align-items:center;gap:12px;">
             <div id="notificationWidget" style="position:relative;">
@@ -877,7 +879,6 @@
                     </div>
                 </div>
             </div>
-
             <!-- Admin broadcast -->
             <div id="adminUpdatePanel"
                 style="display:none;align-items:center;background:var(--bg-raised);border:1px solid rgba(185,124,243,0.2);border-radius:10px;padding:4px;">
@@ -923,7 +924,6 @@
                         style="background:var(--purple);color:#fff;border:none;border-radius:7px;padding:6px 14px;font-weight:700;font-size:11px;cursor:pointer;letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;">Post</button>
                 </div>
             </div>
-
             <!-- Profile chip -->
             <div
                 style="display:flex;align-items:center;gap:10px;background:var(--bg-raised);border:1px solid var(--border);border-radius:10px;padding:6px 14px 6px 8px;">
@@ -938,7 +938,6 @@
                 </div>
             </div>
         </div>
-
         <!-- Shutdown -->
         <button onclick="shutdown()" class="btn-ghost" style="width:36px;height:36px;flex-shrink:0;"
             title="Terminate Session">
@@ -958,7 +957,6 @@
         <aside
             style="border-right:1px solid var(--border);padding:20px 16px;display:flex;flex-direction:column;gap:16px;height:calc(100vh - 56px);position:sticky;top:56px;overflow-y:auto;"
             class="scroll">
-
             <!-- Notice Board -->
             <div>
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
@@ -979,7 +977,6 @@
                         </svg>
                     </button>
                 </div>
-
                 <!-- Bulletin input -->
                 <div id="bulletinInputContainer" style="display:none;margin-bottom:12px;flex-direction:column;gap:8px;">
                     <textarea id="bulletinTextInput" class="inp" style="height:64px;font-size:12px;"
@@ -1014,14 +1011,11 @@
                             to Board</button>
                     </div>
                 </div>
-
                 <div id="bulletinList" class="scroll"
                     style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;"></div>
             </div>
-
             <!-- Divider -->
             <div style="height:1px;background:var(--border);"></div>
-
             <!-- System Updates -->
             <div style="flex:1;display:flex;flex-direction:column;">
                 <div class="sidebar-title" style="color:var(--purple);margin-bottom:14px;">
@@ -1038,7 +1032,6 @@
 
             <!-- ===== HOMEPAGE VIEW ===== -->
             <div id="homePage" style="width:100%;max-width:560px;">
-
                 <!-- Hero -->
                 <div style="margin-bottom:36px;" class="home-in">
                     <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:6px;">
@@ -1047,7 +1040,6 @@
                     </div>
                     <p style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:0.15em;">STANDARDIZER ACTIVE — DEDUPLICATION ENGINE ONLINE</p>
                 </div>
-
                 <!-- Stat cards -->
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px;" class="home-in" id="homeStatsGrid">
                     <div class="stat-card">
@@ -1063,7 +1055,6 @@
                         <div class="stat-label">Online Now</div>
                     </div>
                 </div>
-
                 <!-- CTA -->
                 <button onclick="goToScraper()" class="btn-primary home-in" style="width:100%;padding:18px;font-size:16px;letter-spacing:0.1em;margin-bottom:24px;display:flex;align-items:center;justify-content:center;gap:10px;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -1071,7 +1062,6 @@
                     </svg>
                     Start New Scrape
                 </button>
-
                 <!-- Quick Launch -->
                 <div class="home-in">
                     <div class="section-label" style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
@@ -1084,12 +1074,10 @@
                         <!-- Populated by JS -->
                     </div>
                 </div>
-
             </div>
 
             <!-- ===== SCRAPER VIEW ===== -->
             <div id="scraperView" class="view-hidden" style="width:100%;max-width:540px;">
-
                 <!-- Back button -->
                 <button onclick="goToHome()" class="back-btn">
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -1097,7 +1085,6 @@
                     </svg>
                     Dashboard
                 </button>
-
                 <!-- Page header (scraper) -->
                 <div style="margin-bottom:28px;">
                     <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:4px;">
@@ -1106,10 +1093,8 @@
                     </div>
                     <p style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:0.15em;">STANDARDIZER ACTIVE — DEDUPLICATION ENGINE ONLINE</p>
                 </div>
-
             <!-- Main card -->
             <div class="card" style="width:100%;max-width:540px;padding:28px;">
-
                 <!-- Protocol panel -->
                 <div
                     style="background:var(--bg-surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:20px;">
@@ -1118,13 +1103,10 @@
                         style="font-size:12px;color:var(--text-secondary);line-height:1.7;white-space:pre-wrap;font-style:italic;">
                     </div>
                 </div>
-
                 <!-- Engine selector -->
                 <input type="hidden" id="mode" value="marketplace">
-
                 <!-- Pinned Engines Bar -->
                 <div id="pinnedEnginesBar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;min-height:0;"></div>
-
                 <!-- Palette trigger row -->
                 <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
                     <button id="paletteBtn" onclick="openCommandPalette()"
@@ -1139,7 +1121,6 @@
                         </div>
                         <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted);background:var(--bg-raised);border:1px solid var(--border);border-radius:4px;padding:2px 6px;pointer-events:none;">/</span>
                     </button>
-
                     <!-- Upload btn -->
                     <button onclick="openUploadModal()"
                         style="width:42px;height:42px;flex-shrink:0;background:var(--accent-soft);border:1px solid rgba(99,130,255,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--accent);transition:all 0.15s;"
@@ -1150,10 +1131,8 @@
                         </svg>
                     </button>
                 </div>
-
                 <!-- Hidden container still needed for server-rendered engine HTML -->
                 <div id="engineListContainer" style="display:none;"></div>
-
                 <!-- Dynamic input boxes -->
                 <div style="display:flex;flex-direction:column;gap:12px;">
                     <div id="standardBox" class="hidden"><input id="url" type="text"
@@ -1173,11 +1152,9 @@
                         <input id="cookie" type="text" placeholder="PHPSESSID Cookie" class="inp">
                     </div>
                     <div id="customInputBox" style="display:none;flex-direction:column;gap:10px;"></div>
-
                     <input id="file" type="text" placeholder="Output filename (optional)" class="inp"
                         style="color:var(--text-secondary);">
                 </div>
-
                 <!-- Run controls -->
                 <div style="display:flex;gap:8px;margin-top:16px;">
                     <button id="btn" onclick="run()" class="btn-primary"
@@ -1204,7 +1181,6 @@
                         </svg>
                     </button>
                 </div>
-
                 <!-- Status / counter -->
                 <div id="counterArea"
                     style="display:none;align-items:center;gap:12px;margin-top:14px;padding:10px 14px;background:var(--bg-surface);border:1px solid var(--border);border-radius:10px;">
@@ -1218,7 +1194,6 @@
                         style="display:none;color:var(--red);font-weight:700;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;">
                         ✗ Error</div>
                 </div>
-
                 <!-- Telemetry -->
                 <div id="telemetryBox" style="display:none;margin-top:14px;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -1247,7 +1222,6 @@
                     </div>
                     <div id="telemetry"></div>
                 </div>
-
                 <!-- Footer controls -->
                 <div
                     style="display:flex;align-items:center;justify-content:center;gap:24px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
@@ -1274,7 +1248,6 @@
         <aside
             style="border-left:1px solid var(--border);padding:20px 16px;display:flex;flex-direction:column;gap:16px;height:calc(100vh - 56px);position:sticky;top:56px;overflow-y:auto;"
             class="scroll">
-
             <!-- Online Now -->
             <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
@@ -1331,6 +1304,58 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                         </svg>
                     </button>
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div style="height:1px;background:var(--border);flex-shrink:0;"></div>
+
+            <!-- ========= SERVER RESOURCE PULSE ========= -->
+            <div id="serverPulseWidget" style="flex-shrink:0;">
+                <div class="sidebar-title" style="color:var(--text-muted);margin-bottom:10px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18"/>
+                    </svg>
+                    Server Pulse
+                </div>
+                <div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;">
+                    <!-- Status row -->
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="display:flex;align-items:center;gap:7px;">
+                            <div id="pulseOrb" class="pulse-orb pulse-orb--idle"></div>
+                            <span id="pulseStatusLabel" style="font-family:var(--font-mono);font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-muted);">IDLE</span>
+                        </div>
+                        <span id="pulseLoadPct" style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--text-secondary);">—</span>
+                    </div>
+                    <!-- Load bar -->
+                    <div style="height:3px;background:rgba(255,255,255,0.05);border-radius:99px;overflow:hidden;">
+                        <div id="pulseBar" style="height:100%;width:0%;border-radius:99px;transition:width 0.6s ease,background 0.4s ease;background:var(--emerald);"></div>
+                    </div>
+                    <!-- Sub-metrics row -->
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div style="display:flex;flex-direction:column;gap:2px;">
+                            <span style="font-family:var(--font-mono);font-size:8px;color:var(--text-muted);letter-spacing:0.1em;text-transform:uppercase;">CPU Load</span>
+                            <span id="pulseCpu" style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--text-secondary);">—</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:2px;align-items:center;">
+                            <span style="font-family:var(--font-mono);font-size:8px;color:var(--text-muted);letter-spacing:0.1em;text-transform:uppercase;">Memory</span>
+                            <span id="pulseMem" style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--text-secondary);">—</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:2px;align-items:flex-end;">
+                            <span style="font-family:var(--font-mono);font-size:8px;color:var(--text-muted);letter-spacing:0.1em;text-transform:uppercase;">Active</span>
+                            <span id="pulseActive" style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--text-secondary);">—</span>
+                        </div>
+                    </div>
+                    <!-- Safe-to-fire hint -->
+                    <div id="pulseSafeHint" style="display:none;align-items:center;gap:5px;padding:5px 8px;border-radius:6px;background:rgba(62,207,142,0.06);border:1px solid rgba(62,207,142,0.18);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#3ecf8e" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        <span style="font-family:var(--font-mono);font-size:8px;color:#3ecf8e;letter-spacing:0.1em;">SAFE TO FIRE CONCURRENT SCRAPE</span>
+                    </div>
+                    <div id="pulseWarnHint" style="display:none;align-items:center;gap:5px;padding:5px 8px;border-radius:6px;background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.18);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#f87171" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                        <span style="font-family:var(--font-mono);font-size:8px;color:#f87171;letter-spacing:0.1em;">SERVER UNDER HEAVY LOAD</span>
+                    </div>
                 </div>
             </div>
 

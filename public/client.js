@@ -1979,3 +1979,69 @@ window.zorgSocket.on('init-data', () => {
 // Initial render on page load
 syncHomeStats();
 renderHomeRecentEngines();
+// =============================================
+// SERVER RESOURCE PULSE
+// =============================================
+(function initServerPulse() {
+    const POLL_INTERVAL = 3000; // ms
+
+    const orb         = document.getElementById('pulseOrb');
+    const statusLabel = document.getElementById('pulseStatusLabel');
+    const loadPct     = document.getElementById('pulseLoadPct');
+    const bar         = document.getElementById('pulseBar');
+    const cpuEl       = document.getElementById('pulseCpu');
+    const memEl       = document.getElementById('pulseMem');
+    const activeEl    = document.getElementById('pulseActive');
+    const safeHint    = document.getElementById('pulseSafeHint');
+    const warnHint    = document.getElementById('pulseWarnHint');
+
+    if (!orb) return;
+
+    function applyState(data) {
+        const pct      = Math.round(data.load * 100);
+        const cpuPct   = Math.round(data.loadCpu * 100);
+        const memPct   = Math.round(data.loadMem * 100);
+        const scrapes  = data.activeScrapes || 0;
+
+        let tier, label, barColor;
+        if (data.load < 0.5) {
+            tier = 'idle';     label = 'IDLE';     barColor = '#3ecf8e';
+        } else if (data.load < 0.8) {
+            tier = 'busy';     label = 'BUSY';     barColor = '#f5a623';
+        } else {
+            tier = 'critical'; label = 'OVERLOAD'; barColor = '#f87171';
+        }
+
+        orb.className = `pulse-orb pulse-orb--${tier}`;
+
+        statusLabel.innerText = label;
+        statusLabel.style.color = barColor;
+        loadPct.innerText     = pct + '%';
+        loadPct.style.color   = barColor;
+        cpuEl.innerText       = cpuPct + '%';
+        memEl.innerText       = memPct + '%';
+        activeEl.innerText    = scrapes + (scrapes === 1 ? ' scrape' : ' scrapes');
+        activeEl.style.color  = scrapes > 0 ? '#f97316' : 'var(--text-secondary)';
+
+        bar.style.width      = Math.min(pct, 100) + '%';
+        bar.style.background = barColor;
+
+        const isSafe = tier === 'idle' && scrapes === 0;
+        safeHint.style.display = isSafe              ? 'flex' : 'none';
+        warnHint.style.display = (tier === 'critical') ? 'flex' : 'none';
+    }
+
+    async function poll() {
+        try {
+            const res  = await fetch('/api/health');
+            const data = await res.json();
+            applyState(data);
+        } catch (e) {
+            if (statusLabel) statusLabel.innerText = 'OFFLINE';
+            if (orb) orb.className = 'pulse-orb pulse-orb--critical';
+        }
+    }
+
+    poll();
+    setInterval(poll, POLL_INTERVAL);
+})();
