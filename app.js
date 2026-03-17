@@ -8,7 +8,9 @@ const axios = require('axios');
 const http = require('http');
 const { Server } = require('socket.io');
 const multer = require('multer');
+
 const asyncLocalStorage = new AsyncLocalStorage();
+
 // --- GLOBAL INTERCEPTORS ---
 axios.interceptors.request.use(config => {
     const store = asyncLocalStorage.getStore();
@@ -17,6 +19,7 @@ axios.interceptors.request.use(config => {
     }
     return config;
 });
+
 if (typeof global.fetch === 'function') {
     const originalFetch = global.fetch;
     global.fetch = async function (...args) {
@@ -27,15 +30,19 @@ if (typeof global.fetch === 'function') {
         return originalFetch.apply(this, args);
     };
 }
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const PORT = 3000;
+
 app.use(express.static(path.join(__dirname, 'public'))); // CRITICAL: Serves index.html, style.css, client.js
 app.use(express.json());
+
 // --- FILE UPLOAD CONFIGURATION ---
 const uploadDir = path.join(__dirname, 'public', 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadDir),
     filename: (req, file, cb) => {
@@ -45,6 +52,7 @@ const storage = multer.diskStorage({
     }
 });
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB limit
+
 app.post('/upload-bulletin-file', upload.single('file'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
     res.json({
@@ -52,6 +60,7 @@ app.post('/upload-bulletin-file', upload.single('file'), (req, res) => {
         originalName: req.file.originalname
     });
 });
+
 // --- DYNAMIC ENGINES ---
 const enginesFile = path.join(__dirname, 'engines.json');
 let customEngines = [];
@@ -66,6 +75,7 @@ function loadEngines() {
     }
 }
 loadEngines();
+
 // --- TELEMETRY ENGINE ---
 let globalLogs = [];
 function emitLog(msg) {
@@ -74,28 +84,22 @@ function emitLog(msg) {
     globalLogs.push(logLine);
     console.log(logLine);
 }
+
 app.get('/logs', (req, res) => {
     res.json({ logs: globalLogs });
 });
 
 // --- SERVER RESOURCE PULSE ---
-// Track active scrape count in-process
 let activeScrapeCount = 0;
 
 app.get('/api/health', (req, res) => {
-    // os.loadavg() returns [1min, 5min, 15min] averages
     const [load1] = os.loadavg();
     const cpuCount = os.cpus().length;
-    // Normalise to 0–1 (clamp at 1.0 for display purposes)
     const loadPercent = Math.min(load1 / cpuCount, 1);
-
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
     const memPercent = (totalMem - freeMem) / totalMem;
-
-    // Composite score weighted: 60% CPU load, 40% memory
     const composite = loadPercent * 0.6 + memPercent * 0.4;
-
     res.json({
         load: parseFloat(composite.toFixed(3)),
         loadCpu: parseFloat(loadPercent.toFixed(3)),
@@ -106,24 +110,29 @@ app.get('/api/health', (req, res) => {
 
 // --- ASSETS & FAVICON SUPPORT ---
 app.use('/Icons', express.static(path.join(__dirname, 'Icons')));
+
 app.get('/favicon.ico', (req, res) => {
     const iconPath = path.join(__dirname, 'Icons', 'favicon.ico');
     if (fs.existsSync(iconPath)) res.sendFile(iconPath);
     else res.status(404).end();
 });
+
 // --- EXECUTION ROUTE & STANDARDIZER ---
 app.post('/run', async (req, res) => {
     const { mode, domain, fileName, curlCommand, token, cadEventId, cadClientId, cadEventKey, dynamicShowId, cookie, customInput, testMode } = req.body;
     let rawRecords = [];
+
     // --- LOCK REGISTRATION ---
     let ip = req.socket.remoteAddress || req.ip;
     if (ip && ip.startsWith('::ffff:')) ip = ip.substring(7);
     let currentUser = Object.values(activeUsers).find(u => u.ip === ip);
     let username = currentUser ? currentUser.name : (savedUsers[ip] ? savedUsers[ip].name : "Unknown");
     let socketId = currentUser ? currentUser.id : "unknown-socket";
+
     if (activeEngines[mode] && activeEngines[mode].socketId !== socketId) {
         return res.status(409).json({ error: `Engine is currently in use by ${activeEngines[mode].startedBy}.` });
     }
+
     const defaultScriptMap = {
         'marketplace': 'Map-Dynamics (Marketplace)',
         'dusseldorf': 'Messe Düsseldorf',
@@ -138,27 +147,32 @@ app.post('/run', async (req, res) => {
         if (ce) engName = ce.name;
         else engName = mode;
     }
+
     activeEngines[mode] = { startedBy: username, socketId: socketId, engineName: engName, startTime: Date.now(), mode: mode };
     io.emit('engine-registry-update', activeEngines);
 
-    // Increment active scrape counter
     activeScrapeCount++;
 
     let runState = { aborted: false };
+
     req.on('aborted', () => {
         runState.aborted = true;
         emitLog("Client manually aborted the request. Halting operation...");
     });
+
     res.on('close', () => {
         if (!res.writableEnded && !runState.aborted) {
             runState.aborted = true;
             emitLog("Client connection lost early. Operation ABORTED.");
         }
     });
+
     globalLogs = [];
     emitLog(`--- RUN PROTOCOL STARTED: ${mode.toUpperCase()} ---`);
+
     let originalPush = Array.prototype.push;
     let testRecordsCaptured = [];
+
     try {
         const reqEngine = async (file, ...args) => {
             const p = path.join(__dirname, 'Engines', file);
@@ -166,6 +180,7 @@ app.post('/run', async (req, res) => {
             delete require.cache[require.resolve(p)];
             return await require(p)(...args);
         };
+
         if (testMode) {
             emitLog("🧪 TEST MODE PROTOCOL ACTIVE: Hijacking Engine array memory to force aggressive early exit at 5 records...");
             Array.prototype.push = function (...args) {
@@ -181,6 +196,7 @@ app.post('/run', async (req, res) => {
                 return resOutput;
             };
         }
+
         try {
             await asyncLocalStorage.run({ runState }, async () => {
                 if (mode === 'marketplace') rawRecords = await reqEngine('MapDynamics.js', dynamicShowId, cookie, emitLog, runState);
@@ -225,11 +241,14 @@ app.post('/run', async (req, res) => {
                 io.emit('engine-registry-update', activeEngines);
             }
         }
+
         if (!rawRecords || !rawRecords.length) {
             emitLog("CRITICAL: Scraper returned 0 valid records.");
             return res.status(404).json({ error: "No data found or request expired." });
         }
+
         emitLog(`Structuring, standardizing, and deduplicating ${rawRecords.length} items...`);
+
         const clean = (val) => {
             if (val === undefined || val === null) return 'N/A';
             const str = String(val).trim();
@@ -237,14 +256,18 @@ app.post('/run', async (req, res) => {
             return str;
         };
         const mergedRecordsMap = new Map();
+
         rawRecords.forEach(item => {
             const rawName = item["Company Name"];
             const cleanName = clean(rawName);
             if (cleanName === 'N/A') return;
+
             const uniqueKey = cleanName.toLowerCase();
+
             if (mergedRecordsMap.has(uniqueKey)) {
                 const existingEntry = mergedRecordsMap.get(uniqueKey);
                 const newBooth = clean(item["Booth"]);
+
                 if (newBooth !== 'N/A' && !existingEntry["Booth"].includes(newBooth)) {
                     existingEntry["Booth"] = existingEntry["Booth"] !== 'N/A'
                         ? `${existingEntry["Booth"]}, ${newBooth}`
@@ -263,60 +286,64 @@ app.post('/run', async (req, res) => {
                 });
             }
         });
+
         const standardizedRecords = Array.from(mergedRecordsMap.values());
         emitLog(`Deduplication complete. Final distinct record count: ${standardizedRecords.length}.`);
+
         const ws = XLSX.utils.json_to_sheet(standardizedRecords);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Exhibitors");
+
         emitLog("Building binary buffer stream...");
         const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
         let defaultFileName = domain || token || dynamicShowId || cadEventId || customInput || mode;
         if (defaultFileName) {
             defaultFileName = String(defaultFileName).replace(/[^a-zA-Z0-9_\-\.]/g, '_').substring(0, 40);
         } else {
             defaultFileName = 'ZORG_Data';
         }
+
         emitLog("Transmission ready. Awaiting frontend receipt.");
         res.setHeader('Content-Disposition', `attachment; filename="${fileName || defaultFileName}.xlsx"`);
         res.setHeader('Access-Control-Expose-Headers', 'X-Record-Count');
         res.setHeader('X-Record-Count', standardizedRecords.length);
         res.send(buf);
-        // Notify the user who ran the scraper that it has completed
-        if (socketId && socketId !== "unknown-socket") {
-            io.to(socketId).emit('scraper-complete', {
-                engineName: engName,
-                recordCount: standardizedRecords.length,
-                fileName: fileName || defaultFileName
-            });
-        }
     } catch (err) {
         emitLog(`SYSTEM ERROR: ${err.message}`);
         res.status(500).json({ error: err.message });
     } finally {
-        // Always decrement scrape counter when run finishes
         activeScrapeCount = Math.max(0, activeScrapeCount - 1);
     }
 });
+
 // --- ENGINE ROUTES ---
 app.post('/upload-engine', (req, res) => {
     try {
         const { id, name, instruction, inputType, category, code } = req.body;
         if (!id || !name || !code) throw new Error("Missing required fields. ID, Name, and Code are mandatory.");
+
         const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
         const enginesDir = path.join(__dirname, 'Engines');
         if (!fs.existsSync(enginesDir)) fs.mkdirSync(enginesDir);
+
         const defaultScriptMap = {
             'marketplace': 'MapDynamics.js', 'dusseldorf': 'Dusseldorf.js', 'algolia': 'Algolia.js',
             'informa': 'Informa.js', 'eshow': 'Eshow.js', 'cadmium': 'Cadmium.js'
         };
+
         const scriptPath = defaultScriptMap[safeId] ? path.join(enginesDir, defaultScriptMap[safeId]) : path.join(enginesDir, `${safeId}.js`);
         fs.writeFileSync(scriptPath, code);
+
         const existingIndex = customEngines.findIndex(e => e.id === safeId);
         const engineData = { id: safeId, name, instruction: instruction || '', inputType: inputType !== undefined ? inputType : '', category: category || 'Custom' };
+
         let msgType = existingIndex >= 0 ? 'UPDATED' : 'INSTALLED';
         if (existingIndex >= 0) customEngines[existingIndex] = engineData;
         else customEngines.push(engineData);
+
         fs.writeFileSync(enginesFile, JSON.stringify(customEngines, null, 2));
+
         if (defaultScriptMap[safeId]) {
             let delList = [];
             const delFile = path.join(__dirname, 'deleted_engines.json');
@@ -328,10 +355,12 @@ app.post('/upload-engine', (req, res) => {
                 fs.writeFileSync(delFile, JSON.stringify(delList));
             }
         }
+
         let currDel = [];
         try { if (fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) currDel = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')); } catch (e) { }
         const newCount = 6 + customEngines.length - currDel.length;
         io.emit('update-engine-count', newCount);
+
         emitLog(`Engine '${name}' (${safeId}) has been successfully ${msgType}.`);
         res.json({ success: true, message: `Engine ${name} ${msgType.toLowerCase()} successfully.` });
     } catch (err) {
@@ -339,6 +368,7 @@ app.post('/upload-engine', (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 app.get('/engine/:id', (req, res) => {
     try {
         const id = req.params.id;
@@ -351,6 +381,7 @@ app.get('/engine/:id', (req, res) => {
             'eshow': { file: 'Eshow.js', name: 'eShow (Concurrent)' },
             'cadmium': { file: 'Cadmium.js', name: 'Cadmium (Harvester)' }
         };
+
         let scriptPath;
         if (entry) {
             scriptPath = defaultScriptMap[id] ? path.join(__dirname, 'Engines', defaultScriptMap[id].file) : path.join(__dirname, 'Engines', `${id}.js`);
@@ -360,22 +391,28 @@ app.get('/engine/:id', (req, res) => {
         } else {
             return res.status(404).json({ error: 'Engine metadata not found.' });
         }
+
         if (!fs.existsSync(scriptPath)) return res.status(404).json({ error: 'Script file not found.' });
+
         const codeString = fs.readFileSync(scriptPath, 'utf8');
         res.json({ ...entry, code: codeString });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
+
 app.delete('/delete-engine/:id', (req, res) => {
     try {
         const id = req.params.id;
         const index = customEngines.findIndex(e => e.id === id);
+
         const defaultScriptMap = {
             'marketplace': 'MapDynamics.js', 'dusseldorf': 'Dusseldorf.js', 'algolia': 'Algolia.js',
             'informa': 'Informa.js', 'eshow': 'Eshow.js', 'cadmium': 'Cadmium.js'
         };
+
         if (index === -1 && !defaultScriptMap[id]) return res.status(404).json({ error: 'Engine not found.' });
+
         let engineName = id;
         if (index !== -1) {
             engineName = customEngines[index].name;
@@ -384,6 +421,7 @@ app.delete('/delete-engine/:id', (req, res) => {
         } else if (defaultScriptMap[id]) {
             engineName = id;
         }
+
         if (defaultScriptMap[id]) {
             let delList = [];
             const delFile = path.join(__dirname, 'deleted_engines.json');
@@ -395,12 +433,15 @@ app.delete('/delete-engine/:id', (req, res) => {
                 fs.writeFileSync(delFile, JSON.stringify(delList));
             }
         }
+
         const scriptPath = defaultScriptMap[id] ? path.join(__dirname, 'Engines', defaultScriptMap[id]) : path.join(__dirname, 'Engines', `${id}.js`);
         if (fs.existsSync(scriptPath)) fs.unlinkSync(scriptPath);
+
         let currDel = [];
         try { if (fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) currDel = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')); } catch (e) { }
         const newCount = 6 + customEngines.length - currDel.length;
         io.emit('update-engine-count', newCount);
+
         emitLog(`Engine '${engineName}' (${id}) has been DELETED.`);
         res.json({ success: true, message: `Engine ${engineName} deleted successfully.` });
     } catch (err) {
@@ -408,10 +449,12 @@ app.delete('/delete-engine/:id', (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 app.post('/shutdown', (req, res) => {
     res.send({ status: 'off' });
     setTimeout(() => process.exit(0), 1000);
 });
+
 // --- SYSTEM UPDATES LOGIC ---
 const logsFile = path.join(__dirname, 'logs.json');
 let systemLogs = [];
@@ -428,9 +471,11 @@ try {
         fs.writeFileSync(logsFile, JSON.stringify([]));
     }
 } catch (e) { console.error("Error loading logs.json", e); }
+
 app.post('/admin/add-log', (req, res) => {
     let ip = req.socket.remoteAddress || req.ip;
     if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+
     let userEntry = savedUsers[ip];
     let isAdmin = false;
     let authorName = "Admin";
@@ -438,43 +483,55 @@ app.post('/admin/add-log', (req, res) => {
         isAdmin = true;
         authorName = userEntry.name;
     }
+
     if (!isAdmin) return res.status(403).json({ error: "Unauthorized. Admin privileges required." });
+
     const { text, category } = req.body;
     if (!text || !category) return res.status(400).json({ error: "Missing text or category." });
+
     const newUpdate = { id: Date.now(), text, category, date: new Date().toISOString(), author: authorName };
+
     systemLogs.unshift(newUpdate);
     if (systemLogs.length > 50) systemLogs = systemLogs.slice(0, 50);
     fs.writeFileSync(logsFile, JSON.stringify(systemLogs, null, 2));
+
     io.emit('new-system-update', newUpdate);
     res.json({ success: true, message: "System update broadcasted." });
 });
+
 app.post('/admin/clear-logs', (req, res) => {
     let ip = req.socket.remoteAddress || req.ip;
     if (ip.startsWith('::ffff:')) ip = ip.substring(7);
     let userEntry = savedUsers[ip];
     if (!userEntry || userEntry.role !== 'admin') return res.status(403).json({ error: "Unauthorized." });
+
     systemLogs = [];
     fs.writeFileSync(logsFile, JSON.stringify([]));
     io.emit('clear-logs');
     res.json({ success: true });
 });
+
 app.delete('/admin/delete-log/:id', (req, res) => {
     let ip = req.socket.remoteAddress || req.ip;
     if (ip.startsWith('::ffff:')) ip = ip.substring(7);
     let userEntry = savedUsers[ip];
     if (!userEntry || userEntry.role !== 'admin') return res.status(403).json({ error: "Unauthorized." });
+
     const id = parseInt(req.params.id);
     systemLogs = systemLogs.filter(log => log.id !== id);
     fs.writeFileSync(logsFile, JSON.stringify(systemLogs, null, 2));
+
     io.emit('delete-log', id);
     res.json({ success: true });
 });
+
 // --- SOCKET.IO REAL-TIME SYSTEM & HTML GENERATOR ---
 const usersFile = path.join(__dirname, 'users.json');
 let savedUsers = {};
 try {
     if (fs.existsSync(usersFile)) savedUsers = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
 } catch (e) { console.error("Error loading users.json", e); }
+
 // --- CHAT SYSTEM LOGIC ---
 const chatFile = path.join(__dirname, 'chat.json');
 let chatHistory = {};
@@ -482,12 +539,15 @@ try {
     if (fs.existsSync(chatFile)) chatHistory = JSON.parse(fs.readFileSync(chatFile, 'utf8'));
     else fs.writeFileSync(chatFile, JSON.stringify({}));
 } catch (e) { console.error("Error loading chat.json", e); }
+
 // Helper to alphabetically link two names together for a unique chat room
 function getChatKey(name1, name2) {
     return [name1, name2].sort().join(':');
 }
+
 const activeUsers = {};
 const activeEngines = {};
+
 // --- BULLETIN BOARD LOGIC ---
 const bulletinFile = path.join(__dirname, 'bulletin.json');
 let bulletinPosts = [];
@@ -506,12 +566,14 @@ try {
         fs.writeFileSync(bulletinFile, JSON.stringify(bulletinPosts, null, 2));
     }
 } catch (e) { console.error("Error loading bulletin.json", e); bulletinPosts = []; }
+
 function generateDropdownHtml(isAdmin) {
     let deletedEngines = [];
     try {
         const delFile = path.join(__dirname, 'deleted_engines.json');
         if (fs.existsSync(delFile)) deletedEngines = JSON.parse(fs.readFileSync(delFile, 'utf8'));
     } catch (e) { }
+
     const defaultEnginesBase = [
         { id: 'marketplace', name: 'Map-Dynamics (Marketplace)' },
         { id: 'dusseldorf', name: 'Messe Düsseldorf' },
@@ -520,7 +582,9 @@ function generateDropdownHtml(isAdmin) {
         { id: 'eshow', name: 'eShow (Concurrent)' },
         { id: 'cadmium', name: 'Cadmium (Harvester)' }
     ];
+
     const allCategories = { 'General': [] };
+
     defaultEnginesBase.forEach(def => {
         if (deletedEngines.includes(def.id)) return;
         const customOverride = customEngines.find(e => e.id === def.id);
@@ -532,6 +596,7 @@ function generateDropdownHtml(isAdmin) {
             allCategories['General'].push({ id: def.id, name: def.name, isCustom: false });
         }
     });
+
     customEngines.forEach(e => {
         if (defaultEnginesBase.some(def => def.id === e.id)) return;
         if (deletedEngines.includes(e.id)) return;
@@ -539,6 +604,7 @@ function generateDropdownHtml(isAdmin) {
         if (!allCategories[cat]) allCategories[cat] = [];
         allCategories[cat].push({ id: e.id, name: e.name, isCustom: true });
     });
+
     let html = '';
     for (const [cat, engines] of Object.entries(allCategories)) {
         const isGeneral = cat === 'General';
@@ -566,9 +632,11 @@ function generateDropdownHtml(isAdmin) {
     }
     return html;
 }
+
 function generateDynamicEngineData() {
     const inst = {};
     const toggleLogic = {};
+
     customEngines.forEach(e => {
         inst[e.id] = e.instruction || '';
         let input = (e.inputType || '').trim();
@@ -581,27 +649,35 @@ function generateDynamicEngineData() {
     });
     return { instructions: inst, logic: toggleLogic };
 }
+
 io.on('connection', (socket) => {
     let ip = socket.handshake.address || '';
     if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+
     let userEntry = savedUsers[ip];
     let uName = "";
     let isAdmin = false;
+
     if (userEntry) {
         if (typeof userEntry === 'string') { uName = userEntry; }
         else { uName = userEntry.name; if (userEntry.role === 'admin') isAdmin = true; }
     }
+
     // --- BULLETIN BOARD ROUTES ---
     socket.on('add-bulletin', (data) => {
         const sender = activeUsers[socket.id];
         if (!sender || !data) return;
+
         // Admin only
         const userEntry = savedUsers[ip];
         const isUserAdmin = userEntry && typeof userEntry === 'object' && userEntry.role === 'admin';
         if (!isUserAdmin) return;
+
         // Safely extract text to prevent server crashes if it's empty
         const safeText = (data.text || '').trim();
+
         if (!safeText && !data.fileUrl) return; // Ignore completely blank pins
+
         const newPin = {
             id: Date.now(),
             author: sender.name,
@@ -610,27 +686,34 @@ io.on('connection', (socket) => {
             fileName: data.fileName || null,
             timestamp: Date.now()
         };
+
         bulletinPosts.unshift(newPin);
         if (bulletinPosts.length > 30) bulletinPosts.pop();
+
         fs.writeFileSync(bulletinFile, JSON.stringify(bulletinPosts, null, 2));
         io.emit('new-bulletin', newPin);
     });
+
     socket.on('delete-bulletin', (id) => {
         // Allow the author or an admin to delete a pin
         const sender = activeUsers[socket.id];
         const userEntry = savedUsers[ip];
         const isUserAdmin = userEntry && typeof userEntry === 'object' && userEntry.role === 'admin';
+
         const postIndex = bulletinPosts.findIndex(p => p.id === id);
         if (postIndex === -1) return;
+
         if (isUserAdmin || bulletinPosts[postIndex].author === sender.name) {
             bulletinPosts.splice(postIndex, 1);
             fs.writeFileSync(bulletinFile, JSON.stringify(bulletinPosts, null, 2));
             io.emit('remove-bulletin', id);
         }
     });
+
     let deletedEnginesCount = 0;
     try { if (fs.existsSync(path.join(__dirname, 'deleted_engines.json'))) deletedEnginesCount = JSON.parse(fs.readFileSync(path.join(__dirname, 'deleted_engines.json'), 'utf8')).length; } catch (e) { }
     const engineCount = 6 + customEngines.length - deletedEnginesCount;
+
     // Send payload on connect
     socket.emit('init-data', {
         isAdmin,
@@ -642,6 +725,7 @@ io.on('connection', (socket) => {
         userName: uName || "Agent",
         bulletinPosts: bulletinPosts // <-- ADD THIS LINE
     });
+
     if (uName) {
         const savedColor = (savedUsers[ip] && typeof savedUsers[ip] === 'object') ? savedUsers[ip].avatarColor || null : null;
         activeUsers[socket.id] = { id: socket.id, name: uName, ip: ip, status: 'online', avatarColor: savedColor, scrapeCount: 0, viewing: null };
@@ -649,13 +733,16 @@ io.on('connection', (socket) => {
     } else {
         socket.emit('request-name');
     }
+
     socket.on('register-name', (name) => {
         if (!name || !name.trim()) return;
         const cleanName = name.trim();
         savedUsers[ip] = { name: cleanName, role: 'user' };
         fs.writeFileSync(usersFile, JSON.stringify(savedUsers, null, 2));
+
         activeUsers[socket.id] = { id: socket.id, name: cleanName, ip: ip, status: 'online', avatarColor: null, scrapeCount: 0, viewing: null };
         io.emit('online-users', Object.values(activeUsers));
+
         socket.emit('init-data', {
             isAdmin: false,
             logs: systemLogs.slice(0, 10),
@@ -667,11 +754,13 @@ io.on('connection', (socket) => {
             bulletinPosts: bulletinPosts // <-- ADD THIS LINE
         });
     });
+
     // --- ADMIN GLOBAL REFRESH ---
     socket.on('admin-force-refresh', () => {
         // 1. Verify Admin status based on IP
         let ip = socket.handshake.address || '';
         if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+
         let userEntry = savedUsers[ip];
         if (userEntry && typeof userEntry === 'object' && userEntry.role === 'admin') {
             // 2. Broadcast the execution signal to ALL connected clients
@@ -679,18 +768,21 @@ io.on('connection', (socket) => {
             io.emit('execute-global-refresh', Date.now());
         }
     });
+
     socket.on('disconnect', () => {
         if (activeUsers[socket.id]) {
             delete activeUsers[socket.id];
             io.emit('online-users', Object.values(activeUsers));
         }
     });
+
     socket.on('update-presence', (status) => {
         if (activeUsers[socket.id]) {
             activeUsers[socket.id].status = status;
             io.emit('online-users', Object.values(activeUsers));
         }
     });
+
     socket.on('update-avatar-color', (color) => {
         if (activeUsers[socket.id] && /^#[0-9a-fA-F]{6}$/.test(color)) {
             activeUsers[socket.id].avatarColor = color;
@@ -702,18 +794,21 @@ io.on('connection', (socket) => {
             io.emit('online-users', Object.values(activeUsers));
         }
     });
+
     socket.on('update-scrape-count', (count) => {
         if (activeUsers[socket.id]) {
             activeUsers[socket.id].scrapeCount = parseInt(count) || 0;
             io.emit('online-users', Object.values(activeUsers));
         }
     });
+
     socket.on('update-viewing', (engineName) => {
         if (activeUsers[socket.id]) {
             activeUsers[socket.id].viewing = engineName || null;
             io.emit('online-users', Object.values(activeUsers));
         }
     });
+
     socket.on('typing-start', ({ targetName }) => {
         const sender = activeUsers[socket.id];
         if (!sender) return;
@@ -722,6 +817,7 @@ io.on('connection', (socket) => {
             io.to(targetUser.id).emit('user-typing', { from: sender.name });
         }
     });
+
     socket.on('typing-stop', ({ targetName }) => {
         const sender = activeUsers[socket.id];
         if (!sender) return;
@@ -730,6 +826,7 @@ io.on('connection', (socket) => {
             io.to(targetUser.id).emit('user-stopped-typing', { from: sender.name });
         }
     });
+
     // --- PERSISTENT CHAT ROUTING ---
     socket.on('request-chat-history', (targetName) => {
         const sender = activeUsers[socket.id];
@@ -737,18 +834,24 @@ io.on('connection', (socket) => {
         const key = getChatKey(sender.name, targetName);
         socket.emit('chat-history', { targetName, history: chatHistory[key] || [] });
     });
+
     socket.on('send-private-msg', ({ targetName, message }) => {
         const sender = activeUsers[socket.id];
         if (!sender || !targetName) return;
+
         const key = getChatKey(sender.name, targetName);
         if (!chatHistory[key]) chatHistory[key] = [];
+
         const msgObj = { from: sender.name, to: targetName, text: message, timestamp: Date.now() };
         chatHistory[key].push(msgObj);
+
         // Keep file at a reasonable size (last 100 messages per chat)
         if (chatHistory[key].length > 100) chatHistory[key] = chatHistory[key].slice(-100);
         fs.writeFileSync(chatFile, JSON.stringify(chatHistory, null, 2));
+
         // 1. Send it back to the sender so their screen updates instantly
         socket.emit('receive-private-msg', msgObj);
+
         // 2. Find the target user's current live socket ID and send it to them
         const targetUser = Object.values(activeUsers).find(u => u.name === targetName);
         if (targetUser) {
@@ -756,6 +859,8 @@ io.on('connection', (socket) => {
         }
     });
 });
+
 // Serve frontend
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
+
 server.listen(PORT, '0.0.0.0', () => console.log(`🚀 ZORG-Ω Architect Online: http://localhost:${PORT}`));
