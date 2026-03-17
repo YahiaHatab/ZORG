@@ -101,101 +101,287 @@ window.zorgSocket.on('init-data', (data) => {
     }
 });
 
-// -- DROPDOWN & SEARCH --
-function toggleSearch() {
-    searchActive = !searchActive;
-    const searchContainer = document.getElementById('searchContainer');
-    const dropdownMenu = document.getElementById('dropdownMenu');
-    const searchInput = document.getElementById('engineSearchInput');
+// =============================================
+// ENGINE MENU — Command Palette + Pinned Bar
+// =============================================
 
-    if (searchActive) {
-        searchContainer.style.display = 'block';
-        dropdownMenu.style.display = 'flex';
-        searchInput.focus();
-    } else {
-        searchContainer.style.display = 'none';
-        searchInput.value = '';
-        filterEngines();
-    }
+const PINS_KEY = 'zorg_pinned_engines';
+let paletteEngines = [];   // flat array: { id, name, category, isCustom }
+let paletteIndex  = -1;    // keyboard nav cursor
+
+// --- Extract flat engine list from server-rendered HTML ---
+function extractEnginesFromHTML() {
+    const items = document.querySelectorAll('#engineListContainer .dropdown-engine-item');
+    const engines = [];
+    items.forEach(el => {
+        const id   = el.getAttribute('onclick')?.match(/selectEngine\('([^']+)'/)?.[1];
+        const name = el.getAttribute('data-engine-name');  // lowercase name attr
+        // grab display name from the span inside
+        const displayName = el.querySelector('span')?.innerText?.trim() || name;
+        // category: find parent cat div
+        const catDiv = el.closest('[id^="cat-"]');
+        const category = catDiv ? catDiv.id.replace('cat-', '') : 'General';
+        const isCustom = el.querySelector('.palette-dot')?.style?.background?.includes('b97cf3') ||
+                         el.querySelector('span[style*="b97cf3"]') !== null;
+        if (id && displayName) engines.push({ id, name: displayName, category, isCustom });
+    });
+
+    // Also include built-in engines that might not be in server HTML
+    const builtins = [
+        { id: 'marketplace', name: 'Map-Dynamics (Marketplace)', category: 'General', isCustom: false },
+        { id: 'dusseldorf',  name: 'Messe Düsseldorf',           category: 'General', isCustom: false },
+        { id: 'algolia',     name: 'NürnbergMesse (Algolia)',     category: 'General', isCustom: false },
+        { id: 'informa',     name: 'Informa Markets (cURL)',      category: 'General', isCustom: false },
+        { id: 'eshow',       name: 'eShow (Concurrent)',          category: 'General', isCustom: false },
+        { id: 'cadmium',     name: 'Cadmium (Harvester)',         category: 'General', isCustom: false },
+    ];
+    builtins.forEach(b => {
+        if (!engines.find(e => e.id === b.id)) engines.unshift(b);
+    });
+
+    return engines;
 }
 
-function filterEngines() {
-    const term = document.getElementById('engineSearchInput').value.toLowerCase();
-    const items = document.querySelectorAll('.dropdown-engine-item');
+// --- Pins persistence ---
+function getPins() {
+    try { return JSON.parse(localStorage.getItem(PINS_KEY)) || []; } catch { return []; }
+}
+function savePins(pins) {
+    localStorage.setItem(PINS_KEY, JSON.stringify(pins));
+}
+function isPinned(id) {
+    return getPins().some(p => p.id === id);
+}
+function togglePin(id, name, isCustom) {
+    let pins = getPins();
+    if (isPinned(id)) {
+        pins = pins.filter(p => p.id !== id);
+        showToast(`Unpinned: ${name}`, 'success');
+    } else {
+        if (pins.length >= 6) {
+            showToast('Max 6 pins. Unpin one first.', 'error');
+            return;
+        }
+        pins.push({ id, name, isCustom: !!isCustom });
+        showToast(`Pinned: ${name}`, 'success');
+    }
+    savePins(pins);
+    renderPinnedBar();
+    // refresh pin icons in open palette
+    document.querySelectorAll('.palette-pin-btn').forEach(btn => {
+        const btnId = btn.dataset.id;
+        btn.classList.toggle('pinned', isPinned(btnId));
+        btn.title = isPinned(btnId) ? 'Unpin' : 'Pin';
+    });
+}
 
-    if (term === '') {
-        items.forEach(item => item.style.display = 'flex');
-        // Show all category containers
-        document.querySelectorAll('[id^="cat-"]').forEach(cat => cat.classList.remove('hidden'));
-        document.getElementById('noResults').classList.add('hidden');
+// --- Pinned bar render ---
+function renderPinnedBar() {
+    const bar = document.getElementById('pinnedEnginesBar');
+    if (!bar) return;
+    const pins = getPins();
+    const activeId = document.getElementById('mode').value;
+
+    if (pins.length === 0) {
+        bar.innerHTML = `<button class="pin-add-chip" onclick="openCommandPalette()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            Pin engines
+        </button>`;
         return;
     }
 
-    let anyVisible = false;
-    items.forEach(item => {
-        const name = item.getAttribute('data-engine-name') || '';
-        if (name.includes(term)) {
-            item.style.display = 'flex';
-            anyVisible = true;
-            // Expand parent category
-            const parentCat = item.closest('[id^="cat-"]');
-            if (parentCat) {
-                parentCat.classList.remove('hidden');
-                const catName = parentCat.id.replace('cat-', '');
-                const icon = document.getElementById('icon-' + catName);
-                if (icon) icon.classList.add('rotate-180');
+    bar.innerHTML = pins.map(p => {
+        const dotColor = p.isCustom ? 'var(--purple)' : 'var(--accent)';
+        const isActive = p.id === activeId;
+        return `<div class="pin-chip${isActive ? ' active' : ''}" onclick="selectEngine('${p.id}','${p.name.replace(/'/g,"\\'")}')">
+            <div class="pin-chip-dot" style="background:${dotColor};"></div>
+            <span>${p.name}</span>
+            <span class="pin-chip-unpin" onclick="event.stopPropagation();togglePin('${p.id}','${p.name.replace(/'/g,"\\'")}',${p.isCustom})" title="Unpin">
+                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </span>
+        </div>`;
+    }).join('') + `<button class="pin-add-chip" onclick="openCommandPalette()" title="Open engine search">
+        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+    </button>`;
+}
+
+// --- Command Palette open/close ---
+function openCommandPalette() {
+    paletteEngines = extractEnginesFromHTML();
+    paletteIndex = -1;
+    document.getElementById('paletteInput').value = '';
+    renderPaletteList(paletteEngines);
+    const palette = document.getElementById('commandPalette');
+    palette.classList.add('open');
+    setTimeout(() => document.getElementById('paletteInput').focus(), 40);
+    document.body.classList.add('modal-open');
+}
+
+function closeCommandPalette() {
+    document.getElementById('commandPalette').classList.remove('open');
+    document.body.classList.remove('modal-open');
+    paletteIndex = -1;
+}
+
+// --- Palette filtering ---
+function filterPalette() {
+    const term = document.getElementById('paletteInput').value.toLowerCase().trim();
+    if (!term) {
+        renderPaletteList(paletteEngines);
+        return;
+    }
+    const filtered = paletteEngines.filter(e =>
+        e.name.toLowerCase().includes(term) || e.category.toLowerCase().includes(term)
+    );
+    paletteIndex = filtered.length > 0 ? 0 : -1;
+    renderPaletteList(filtered, term);
+}
+
+function renderPaletteList(engines, highlight = '') {
+    const list = document.getElementById('paletteList');
+    if (!list) return;
+
+    if (engines.length === 0) {
+        list.innerHTML = `<div style="text-align:center;padding:28px;color:var(--text-muted);font-family:var(--font-mono);font-size:11px;">No engines found</div>`;
+        return;
+    }
+
+    // Group by category
+    const groups = {};
+    engines.forEach(e => {
+        if (!groups[e.category]) groups[e.category] = [];
+        groups[e.category].push(e);
+    });
+
+    let flatIndex = 0;
+    let html = '';
+    for (const [cat, items] of Object.entries(groups)) {
+        html += `<div style="padding:6px 14px 4px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-muted);">${cat}</div>`;
+        items.forEach(e => {
+            const pinned = isPinned(e.id);
+            const dotColor = e.isCustom ? 'var(--purple)' : 'var(--accent)';
+            const selected = flatIndex === paletteIndex ? ' palette-selected' : '';
+            const safeName = e.name.replace(/'/g, "\\'");
+            let displayName = e.name;
+            if (highlight) {
+                const idx = e.name.toLowerCase().indexOf(highlight);
+                if (idx !== -1) {
+                    displayName = e.name.slice(0, idx) +
+                        `<span style="color:var(--accent);background:var(--accent-soft);border-radius:2px;">${e.name.slice(idx, idx + highlight.length)}</span>` +
+                        e.name.slice(idx + highlight.length);
+                }
             }
-        } else {
-            item.style.display = 'none';
-        }
-    });
-
-    document.getElementById('noResults').classList.toggle('hidden', anyVisible);
-
-    // Hide category sections that have no visible items
-    document.querySelectorAll('[id^="cat-"]').forEach(catDiv => {
-        const visibleItems = catDiv.querySelectorAll('.dropdown-engine-item:not([style*="none"])');
-        const parent = catDiv.parentElement;
-        if (parent) parent.style.display = visibleItems.length > 0 ? 'block' : 'none';
-    });
+            html += `<div class="palette-item${selected}" data-palette-index="${flatIndex}"
+                onclick="paletteSelectEngine('${e.id}','${safeName}')">
+                <div style="width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0;"></div>
+                <span class="palette-item-name">${displayName}</span>
+                <span class="palette-item-cat">${cat}</span>
+                <button class="palette-pin-btn${pinned ? ' pinned' : ''}" data-id="${e.id}"
+                    title="${pinned ? 'Unpin' : 'Pin'}"
+                    onclick="event.stopPropagation();togglePin('${e.id}','${safeName}',${e.isCustom})">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+                    </svg>
+                </button>
+            </div>`;
+            flatIndex++;
+        });
+    }
+    list.innerHTML = html;
+    scrollPaletteSelected();
 }
 
-function toggleDropdownMenu() {
-    const menu = document.getElementById('dropdownMenu');
-    const isHidden = menu.style.display === 'none' || menu.style.display === '';
-    menu.style.display = isHidden ? 'flex' : 'none';
-    if (isHidden && searchActive) setTimeout(() => document.getElementById('engineSearchInput').focus(), 50);
+function paletteSelectEngine(id, name) {
+    selectEngine(id, name);
+    closeCommandPalette();
 }
 
-function toggleCategory(cat) {
-    const catDiv = document.getElementById('cat-' + cat);
-    const iconDiv = document.getElementById('icon-' + cat);
-    if (catDiv.classList.contains('hidden')) {
-        catDiv.classList.remove('hidden');
-        iconDiv.classList.add('rotate-180');
-    } else {
-        catDiv.classList.add('hidden');
-        iconDiv.classList.remove('rotate-180');
+// --- Keyboard navigation ---
+function handlePaletteKey(e) {
+    const term = document.getElementById('paletteInput').value.toLowerCase().trim();
+    const visible = term
+        ? paletteEngines.filter(en => en.name.toLowerCase().includes(term) || en.category.toLowerCase().includes(term))
+        : paletteEngines;
+
+    if (e.key === 'Escape') { closeCommandPalette(); return; }
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        paletteIndex = Math.min(paletteIndex + 1, visible.length - 1);
+        renderPaletteList(visible, term);
+        return;
+    }
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        paletteIndex = Math.max(paletteIndex - 1, 0);
+        renderPaletteList(visible, term);
+        return;
+    }
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const target = paletteIndex >= 0 ? visible[paletteIndex] : visible[0];
+        if (target) paletteSelectEngine(target.id, target.name);
+        return;
+    }
+    if (e.key === 'p' || e.key === 'P') {
+        const target = paletteIndex >= 0 ? visible[paletteIndex] : null;
+        if (target) { togglePin(target.id, target.name, target.isCustom); }
+        return;
     }
 }
+
+function scrollPaletteSelected() {
+    const sel = document.querySelector('.palette-item.palette-selected');
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
+}
+
+// --- Global '/' hotkey to open palette (only when scraper view is visible) ---
+document.addEventListener('keydown', function(e) {
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+        const scraper = document.getElementById('scraperView');
+        if (!scraper || scraper.classList.contains('view-hidden')) return;
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        e.preventDefault();
+        openCommandPalette();
+    }
+    if (e.key === 'Escape') {
+        const palette = document.getElementById('commandPalette');
+        if (palette?.classList.contains('open')) closeCommandPalette();
+    }
+});
+
+// --- Stub out old functions so server-injected HTML doesn't break ---
+function toggleDropdownMenu() { openCommandPalette(); }
+function toggleSearch() { openCommandPalette(); }
+function filterEngines() {}
+function toggleCategory() {}
+
+// --- Init on init-data (after server populates engineListContainer) ---
+// Refresh palette engines list and re-render pins bar
+const _origInitDataForMenu = (data) => {
+    // Slight delay to ensure DOM is updated
+    setTimeout(() => {
+        paletteEngines = extractEnginesFromHTML();
+        renderPinnedBar();
+    }, 60);
+};
+window.zorgSocket.on('init-data', _origInitDataForMenu);
+
+// Initial render
+renderPinnedBar();
 
 function selectEngine(id, name) {
     document.getElementById('mode').value = id;
     document.getElementById('dropdownBtnText').innerText = name;
-    document.getElementById('dropdownMenu').style.display = 'none';
     window.zorgSocket.emit('update-viewing', name);
     toggle();
+    renderPinnedBar();
 }
 
-document.addEventListener('click', function (event) {
-    const dropdownBtn = document.getElementById('dropdownBtn');
-    const dropdownMenu = document.getElementById('dropdownMenu');
-    const searchBtn = document.querySelector('button[title="Search Engines"]');
 
-    if (dropdownBtn && dropdownMenu && !dropdownBtn.contains(event.target) && !dropdownMenu.contains(event.target) && (!searchBtn || !searchBtn.contains(event.target))) {
-        dropdownMenu.style.display = 'none';
-    }
-});
 
 // -- DYNAMIC TOGGLE LOGIC --
 function toggle() {
