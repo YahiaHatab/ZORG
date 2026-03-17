@@ -588,9 +588,9 @@ function showToast(message, type = 'success', onClickAction = '') {
         const toast = document.createElement('div');
 
         const configs = {
-            success: { bg: 'rgb(14,24,20)', border: 'rgba(62,207,142,0.35)', icon: '#3ecf8e', label: 'SUCCESS', svg: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>' },
-            error: { bg: 'rgb(24,10,10)', border: 'rgba(248,113,113,0.35)', icon: '#f87171', label: 'ERROR', svg: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>' },
-            whisper: { bg: 'rgb(18,12,28)', border: 'rgba(185,124,243,0.35)', icon: '#b97cf3', label: 'TRANSMISSION', svg: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>' }
+            success: { bg: 'rgba(14,24,20,0.97)', border: 'rgba(62,207,142,0.35)', icon: '#3ecf8e', label: 'SUCCESS', svg: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>' },
+            error: { bg: 'rgba(24,10,10,0.97)', border: 'rgba(248,113,113,0.35)', icon: '#f87171', label: 'ERROR', svg: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>' },
+            whisper: { bg: 'rgba(18,12,28,0.97)', border: 'rgba(185,124,243,0.35)', icon: '#b97cf3', label: 'TRANSMISSION', svg: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>' }
         };
 
         const c = configs[type] || configs.success;
@@ -600,7 +600,7 @@ function showToast(message, type = 'success', onClickAction = '') {
             display: flex; align-items: flex-start; gap: 12px;
             padding: 12px 14px; border-radius: 12px;
             border: 1px solid ${c.border}; background: ${c.bg};
-            width: 296px;
+            backdrop-filter: blur(20px); width: 296px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.4);
             transform: translateX(20px); opacity: 0;
             transition: all 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
@@ -978,7 +978,7 @@ async function run() {
                 }
             }
         } catch (e) { }
-    }, 800);
+    }, 1500);
 
     try {
         abortController = new AbortController();
@@ -1167,105 +1167,75 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-// Snapshot cache for diffing — keyed by socket ID, value is last rendered HTML
-const _userCardSnapshots = {};
-
-function _buildUserCardHtml(u) {
-    const isMe = u.id === window.zorgSocket.id;
-    const initial = (u.name || "?").charAt(0).toUpperCase();
-    const gradient = getAvatarGradient(u);
-    const accent = getAvatarAccent(u);
-
-    let statusText = 'Online';
-    let statusClass = 'status-online';
-    if (u.status === 'away') { statusText = 'Away'; statusClass = 'status-away'; }
-
-    const engEntry = Object.values(activeEnginesMap).find(e => e.socketId === u.id);
-    if (engEntry) { statusText = engEntry.engineName || engEntry.mode; statusClass = 'status-busy'; }
-
-    let viewingBadge = '';
-    if (!engEntry && u.viewing && u.viewing !== 'marketplace') {
-        viewingBadge = `<span style="font-family:'Space Mono',monospace;font-size:8px;color:${accent};opacity:0.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;margin-top:1px;">👁 ${u.viewing}</span>`;
-    }
-
-    const scrapeCount = u.scrapeCount || 0;
-    const tooltipHtml = `<div class="user-tooltip">🔥 ${scrapeCount} scrape${scrapeCount !== 1 ? 's' : ''} today</div>`;
-
-    let dotHtml = `<div class="status-dot ${statusClass}"></div>`;
-    if (isMe) {
-        dotHtml = `<button onclick="toggleStatusManual()" style="background:none;border:none;cursor:pointer;display:flex;padding:0;" title="Toggle Away/Online"><div class="status-dot ${statusClass}" style="pointer-events:none;"></div></button>`;
-    }
-
-    const avatarStyle = `width:34px;height:34px;border-radius:9px;background:${gradient};border:1.5px solid ${accent}30;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:${accent};flex-shrink:0;transition:all 0.2s;`;
-    const avatarHtml = isMe
-        ? `<div class="user-avatar-wrap" onclick="openColorPicker(event)" title="Change your color" style="position:relative;cursor:pointer;">
-            <div style="${avatarStyle}">${initial}</div>
-            <div class="avatar-edit-hint">🎨</div>
-           </div>`
-        : `<div style="${avatarStyle}">${initial}</div>`;
-
-    const safeName = (u.name || "?").replace(/'/g, "\\'");
-    const clickAttr = !isMe ? `onclick="setChatTarget('${safeName}')"` : '';
-    const cardBorder = isMe ? `border-color:${accent}25;` : '';
-
-    const unreadCount = !isMe ? (unreadChatCounts[u.name] || 0) : 0;
-    const unreadBadge = unreadCount > 0
-        ? `<div class="unread-badge" style="position:absolute;top:6px;right:6px;min-width:16px;height:16px;background:var(--purple);border-radius:99px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;font-weight:700;color:#fff;padding:0 4px;pointer-events:none;">${unreadCount > 99 ? '99+' : unreadCount}</div>`
-        : '';
-
-    return `
-        <div class="user-card ${isMe ? 'is-me' : ''}" ${clickAttr} id="user-card-${u.id}" style="${cardBorder}position:relative;">
-            ${avatarHtml}
-            <div style="flex:1;overflow:hidden;pointer-events:none;min-width:0;">
-                <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${isMe ? accent : '#e8eaf0'};">
-                    ${u.name}${isMe ? ' <span style="font-family:\'Space Mono\',monospace;font-size:8px;color:#3d4260;">(You)</span>' : ''}
-                </div>
-                <div style="font-family:'Space Mono',monospace;font-size:9px;color:#7c82a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;">${statusText}</div>
-                ${viewingBadge}
-            </div>
-            ${dotHtml}
-            ${tooltipHtml}
-            ${unreadBadge}
-        </div>
-    `;
-}
-
 function renderOnlineUsers() {
     const listEl = document.getElementById('onlineList');
     if (!listEl) return;
+    listEl.innerHTML = Object.values(currentOnlineUsers).map(u => {
+        const isMe = u.id === window.zorgSocket.id;
+        const initial = (u.name || "?").charAt(0).toUpperCase();
+        const gradient = getAvatarGradient(u);
+        const accent = getAvatarAccent(u);
 
-    const users = Object.values(currentOnlineUsers);
-    const incomingIds = new Set(users.map(u => u.id));
+        // Status
+        let statusText = 'Online';
+        let statusClass = 'status-online';
+        if (u.status === 'away') { statusText = 'Away'; statusClass = 'status-away'; }
 
-    // Remove cards for disconnected users
-    Object.keys(_userCardSnapshots).forEach(id => {
-        if (!incomingIds.has(id)) {
-            const stale = document.getElementById('user-card-' + id);
-            if (stale) stale.remove();
-            delete _userCardSnapshots[id];
+        const engEntry = Object.values(activeEnginesMap).find(e => e.socketId === u.id);
+        if (engEntry) { statusText = engEntry.engineName || engEntry.mode; statusClass = 'status-busy'; }
+
+        // Currently viewing (only show if not already running an engine)
+        let viewingBadge = '';
+        if (!engEntry && u.viewing && u.viewing !== 'marketplace') {
+            viewingBadge = `<span style="font-family:'Space Mono',monospace;font-size:8px;color:${accent};opacity:0.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;margin-top:1px;">👁 ${u.viewing}</span>`;
         }
-    });
 
-    // Add or patch each user card
-    users.forEach((u, index) => {
-        const newHtml = _buildUserCardHtml(u);
-        if (_userCardSnapshots[u.id] === newHtml) return; // nothing changed
-        _userCardSnapshots[u.id] = newHtml;
+        // Scrape count tooltip
+        const scrapeCount = u.scrapeCount || 0;
+        const tooltipHtml = `<div class="user-tooltip">🔥 ${scrapeCount} scrape${scrapeCount !== 1 ? 's' : ''} today</div>`;
 
-        const existing = document.getElementById('user-card-' + u.id);
-        const tmp = document.createElement('div');
-        tmp.innerHTML = newHtml.trim();
-        const newCard = tmp.firstElementChild;
-
-        if (!existing) {
-            const sibling = listEl.children[index];
-            sibling ? listEl.insertBefore(newCard, sibling) : listEl.appendChild(newCard);
-        } else {
-            listEl.replaceChild(newCard, existing);
+        // Status dot / toggle button
+        let dotHtml = `<div class="status-dot ${statusClass}"></div>`;
+        if (isMe) {
+            dotHtml = `<button onclick="toggleStatusManual()" style="background:none;border:none;cursor:pointer;display:flex;padding:0;" title="Toggle Away/Online"><div class="status-dot ${statusClass}" style="pointer-events:none;"></div></button>`;
         }
-    });
-    // renderEngineActivity is intentionally NOT called here — it is decoupled
-    // and only fires from engine-registry-update where it belongs.
+
+        // Avatar — clickable color picker if it's me
+        const avatarStyle = `width:34px;height:34px;border-radius:9px;background:${gradient};border:1.5px solid ${accent}30;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:${accent};flex-shrink:0;transition:all 0.2s;`;
+        const avatarHtml = isMe
+            ? `<div class="user-avatar-wrap" onclick="openColorPicker(event)" title="Change your color" style="position:relative;cursor:pointer;">
+                <div style="${avatarStyle}">${initial}</div>
+                <div class="avatar-edit-hint">🎨</div>
+               </div>`
+            : `<div style="${avatarStyle}">${initial}</div>`;
+
+        const safeName = (u.name || "?").replace(/'/g, "\\'");
+        const clickAttr = !isMe ? `onclick="setChatTarget('${safeName}')"` : '';
+        const cardBorder = isMe ? `border-color:${accent}25;` : '';
+
+        // Unread badge
+        const unreadCount = !isMe ? (unreadChatCounts[u.name] || 0) : 0;
+        const unreadBadge = unreadCount > 0
+            ? `<div class="unread-badge" style="position:absolute;top:6px;right:6px;min-width:16px;height:16px;background:var(--purple);border-radius:99px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;font-weight:700;color:#fff;padding:0 4px;pointer-events:none;">${unreadCount > 99 ? '99+' : unreadCount}</div>`
+            : '';
+
+        return `
+            <div class="user-card ${isMe ? 'is-me' : ''}" ${clickAttr} id="user-card-${u.id}" style="${cardBorder}position:relative;">
+                ${avatarHtml}
+                <div style="flex:1;overflow:hidden;pointer-events:none;min-width:0;">
+                    <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${isMe ? accent : '#e8eaf0'};">
+                        ${u.name}${isMe ? ' <span style="font-family:\'Space Mono\',monospace;font-size:8px;color:#3d4260;">(You)</span>' : ''}
+                    </div>
+                    <div style="font-family:'Space Mono',monospace;font-size:9px;color:#7c82a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;">${statusText}</div>
+                    ${viewingBadge}
+                </div>
+                ${dotHtml}
+                ${tooltipHtml}
+                ${unreadBadge}
+            </div>
+        `;
+    }).join('');
+    renderEngineActivity();
 }
 
 function renderEngineActivity() {
@@ -1307,11 +1277,7 @@ function clearUnread(name) {
 }
 
 function updateUnreadBadge(name) {
-    // Invalidate snapshot so next renderOnlineUsers re-renders this card with correct badge
-    const user = currentOnlineUsers.find(u => u.name === name);
-    if (user) delete _userCardSnapshots[user.id];
-
-    // Also patch live immediately without waiting for next socket event
+    // Find the user card by matching the name text — avoid full re-render
     const cards = document.querySelectorAll('#onlineList .user-card:not(.is-me)');
     cards.forEach(card => {
         const nameEl = card.querySelector('div[style*="font-size:12px"]');
@@ -2013,74 +1979,3 @@ window.zorgSocket.on('init-data', () => {
 // Initial render on page load
 syncHomeStats();
 renderHomeRecentEngines();
-// =============================================
-// SERVER RESOURCE PULSE
-// =============================================
-(function initServerPulse() {
-    const POLL_INTERVAL = 3000;
-
-    const orb         = document.getElementById('pulseOrb');
-    const statusLabel = document.getElementById('pulseStatusLabel');
-    const loadPct     = document.getElementById('pulseLoadPct');
-    const bar         = document.getElementById('pulseBar');
-    const cpuEl       = document.getElementById('pulseCpu');
-    const memEl       = document.getElementById('pulseMem');
-    const activeEl    = document.getElementById('pulseActive');
-    const safeHint    = document.getElementById('pulseSafeHint');
-    const warnHint    = document.getElementById('pulseWarnHint');
-
-    if (!orb) return;
-
-    function applyState(data) {
-        const pct     = Math.round(data.load * 100);
-        const cpuPct  = Math.round(data.loadCpu * 100);
-        const memPct  = Math.round(data.loadMem * 100);
-        const scrapes = data.activeScrapes || 0;
-
-        let tier, label, barColor;
-        if (data.load < 0.5) {
-            tier = 'idle';     label = 'IDLE';     barColor = '#3ecf8e';
-        } else if (data.load < 0.8) {
-            tier = 'busy';     label = 'BUSY';     barColor = '#f5a623';
-        } else {
-            tier = 'critical'; label = 'OVERLOAD'; barColor = '#f87171';
-        }
-
-        orb.className = `pulse-orb pulse-orb--${tier}`;
-        statusLabel.innerText    = label;
-        statusLabel.style.color  = barColor;
-        loadPct.innerText        = pct + '%';
-        loadPct.style.color      = barColor;
-        cpuEl.innerText          = cpuPct + '%';
-        memEl.innerText          = memPct + '%';
-        activeEl.innerText       = scrapes + (scrapes === 1 ? ' scrape' : ' scrapes');
-        activeEl.style.color     = scrapes > 0 ? '#f97316' : 'var(--text-secondary)';
-        bar.style.width          = Math.min(pct, 100) + '%';
-        bar.style.background     = barColor;
-
-        const isSafe = tier === 'idle' && scrapes === 0;
-        safeHint.style.display = isSafe               ? 'flex' : 'none';
-        warnHint.style.display = tier === 'critical'  ? 'flex' : 'none';
-    }
-
-    async function poll() {
-        try {
-            const res  = await fetch('/api/health');
-            const data = await res.json();
-            applyState(data);
-        } catch (e) {
-            if (statusLabel) statusLabel.innerText = 'OFFLINE';
-            if (orb) orb.className = 'pulse-orb pulse-orb--critical';
-        }
-    }
-
-    // Pause polling when tab is hidden, resume when visible
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') poll();
-    });
-
-    poll();
-    setInterval(() => {
-        if (document.visibilityState === 'visible') poll();
-    }, POLL_INTERVAL);
-})();
