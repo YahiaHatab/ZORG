@@ -768,6 +768,8 @@ initProfile();
 let logInterval;
 let abortController;
 let autoScrollTelemetry = true;
+let runTimerInterval;
+let runStartTime = 0;
 
 function copyTelemetry() {
     const text = document.getElementById('telemetry').innerText;
@@ -796,10 +798,14 @@ function toggleTelemetryScroll() {
 function stopRun() {
     if (abortController) abortController.abort();
     clearInterval(logInterval);
+    clearInterval(runTimerInterval);
     document.getElementById('telemetry').innerHTML += '<br><span style="color:#f87171;">> [ERROR] OPERATION ABORTED BY USER (Client Side Halt)</span>';
     document.getElementById('loader').style.display = 'none';
     document.getElementById('errorText').style.display = 'block';
-    document.getElementById('btn').disabled = false;
+    
+    const btn = document.getElementById('btn');
+    btn.disabled = false;
+    syncEngineUI();
 
     const stopBtn = document.getElementById('stopBtn');
     stopBtn.style.pointerEvents = 'none';
@@ -829,6 +835,18 @@ async function run() {
     const telemetry = document.getElementById('telemetry');
 
     btn.disabled = true;
+    
+    // --- Start Execution Timer ---
+    runStartTime = Date.now();
+    btn.innerText = `RUNNING (00:00)`;
+    clearInterval(runTimerInterval);
+    runTimerInterval = setInterval(() => {
+        const secs = Math.floor((Date.now() - runStartTime) / 1000);
+        const m = String(Math.floor(secs / 60)).padStart(2, '0');
+        const s = String(secs % 60).padStart(2, '0');
+        btn.innerText = `RUNNING (${m}:${s})`;
+    }, 1000);
+
     // Enable stop button
     stopBtn.style.pointerEvents = 'auto';
     stopBtn.style.opacity = '1';
@@ -903,7 +921,10 @@ async function run() {
         telemetry.innerHTML += '<br><span style="color:#f87171;">> [ERROR] ' + err.message + '</span>';
         telemetry.scrollTop = telemetry.scrollHeight;
     } finally {
+        clearInterval(runTimerInterval);
         btn.disabled = false;
+        syncEngineUI();
+        
         stopBtn.style.pointerEvents = 'none';
         stopBtn.style.opacity = '0.4';
         stopBtn.style.borderColor = 'var(--border)';
