@@ -1170,7 +1170,10 @@ document.addEventListener('visibilitychange', () => {
 function renderOnlineUsers() {
     const listEl = document.getElementById('onlineList');
     if (!listEl) return;
-    listEl.innerHTML = Object.values(currentOnlineUsers).map(u => {
+
+    const currentIds = new Set();
+    
+    currentOnlineUsers.forEach(u => {
         const isMe = u.id === window.zorgSocket.id;
         const initial = (u.name || "?").charAt(0).toUpperCase();
         const gradient = getAvatarGradient(u);
@@ -1209,8 +1212,6 @@ function renderOnlineUsers() {
                </div>`
             : `<div style="${avatarStyle}">${initial}</div>`;
 
-        const safeName = (u.name || "?").replace(/'/g, "\\'");
-        const clickAttr = !isMe ? `onclick="setChatTarget('${safeName}')"` : '';
         const cardBorder = isMe ? `border-color:${accent}25;` : '';
 
         // Unread badge
@@ -1219,26 +1220,56 @@ function renderOnlineUsers() {
             ? `<div class="unread-badge" style="position:absolute;top:6px;right:6px;min-width:16px;height:16px;background:var(--purple);border-radius:99px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;font-weight:700;color:#fff;padding:0 4px;pointer-events:none;">${unreadCount > 99 ? '99+' : unreadCount}</div>`
             : '';
 
-        return `
-            <div class="user-card ${isMe ? 'is-me' : ''}" ${clickAttr} id="user-card-${u.id}" style="${cardBorder}position:relative;">
-                ${avatarHtml}
-                <div style="flex:1;overflow:hidden;pointer-events:none;min-width:0;">
-                    <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${isMe ? accent : '#e8eaf0'};">
-                        ${u.name}${isMe ? ' <span style="font-family:\'Space Mono\',monospace;font-size:8px;color:#3d4260;">(You)</span>' : ''}
-                    </div>
-                    <div style="font-family:'Space Mono',monospace;font-size:9px;color:#7c82a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;">${statusText}</div>
-                    ${viewingBadge}
+        const cardId = `user-card-${u.id}`;
+        currentIds.add(cardId);
+
+        const newInnerHtml = `
+            ${avatarHtml}
+            <div style="flex:1;overflow:hidden;pointer-events:none;min-width:0;">
+                <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${isMe ? accent : '#e8eaf0'};">
+                    ${u.name}${isMe ? ' <span style="font-family:\'Space Mono\',monospace;font-size:8px;color:#3d4260;">(You)</span>' : ''}
                 </div>
-                ${dotHtml}
-                ${tooltipHtml}
-                ${unreadBadge}
+                <div style="font-family:'Space Mono',monospace;font-size:9px;color:#7c82a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;">${statusText}</div>
+                ${viewingBadge}
             </div>
+            ${dotHtml}
+            ${tooltipHtml}
+            ${unreadBadge}
         `;
-    }).join('');
-    // renderEngineActivity is intentionally NOT called here.
-    // It is only triggered by engine-registry-update — the one event
-    // that actually changes engine state. Calling it here caused it to
-    // fire on every presence ping (away/online, viewing, scrape count).
+
+        let cardEl = document.getElementById(cardId);
+        if (!cardEl) {
+            cardEl = document.createElement('div');
+            cardEl.id = cardId;
+            cardEl.className = `user-card ${isMe ? 'is-me' : ''}`;
+            if (!isMe) {
+                const safeName = (u.name || "?").replace(/'/g, "\\'");
+                cardEl.onclick = () => setChatTarget(u.name);
+            }
+            cardEl.style.cssText = `${cardBorder}position:relative;`;
+            cardEl.innerHTML = newInnerHtml;
+            listEl.appendChild(cardEl);
+        } else {
+            // Update the card if something changed
+            const targetStyle = `${cardBorder}position:relative;`;
+            if (cardEl.style.cssText !== targetStyle) cardEl.style.cssText = targetStyle;
+
+            // Only update innerHTML if it's actually different to avoid layout trash
+            // We use a simple hash/string compare
+            if (cardEl.innerHTML.trim() !== newInnerHtml.trim()) {
+                cardEl.innerHTML = newInnerHtml;
+            }
+            // Always ensure it's in the correct position for sorting
+            listEl.appendChild(cardEl);
+        }
+    });
+
+    // Remove users who are now offline
+    Array.from(listEl.children).forEach(child => {
+        if (child.id && child.id.startsWith('user-card-') && !currentIds.has(child.id)) {
+            child.remove();
+        }
+    });
 }
 
 // Shared interval that only patches the elapsed timer text nodes —
