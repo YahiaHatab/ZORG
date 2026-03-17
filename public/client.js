@@ -1086,6 +1086,12 @@ function renderOnlineUsers() {
         const clickAttr = !isMe ? `onclick="setChatTarget('${safeName}')"` : '';
         const cardBorder = isMe ? `border-color:${accent}25;` : '';
 
+        // Unread badge
+        const unreadCount = !isMe ? (unreadChatCounts[u.name] || 0) : 0;
+        const unreadBadge = unreadCount > 0
+            ? `<div class="unread-badge" style="position:absolute;top:6px;right:6px;min-width:16px;height:16px;background:var(--purple);border-radius:99px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;font-weight:700;color:#fff;padding:0 4px;pointer-events:none;">${unreadCount > 99 ? '99+' : unreadCount}</div>`
+            : '';
+
         return `
             <div class="user-card ${isMe ? 'is-me' : ''}" ${clickAttr} id="user-card-${u.id}" style="${cardBorder}position:relative;">
                 ${avatarHtml}
@@ -1098,6 +1104,7 @@ function renderOnlineUsers() {
                 </div>
                 ${dotHtml}
                 ${tooltipHtml}
+                ${unreadBadge}
             </div>
         `;
     }).join('');
@@ -1129,6 +1136,44 @@ function renderEngineActivity() {
 }
 
 let activeChatTargetName = null;
+const unreadChatCounts = {}; // { senderName: count }
+
+function incrementUnread(name) {
+    unreadChatCounts[name] = (unreadChatCounts[name] || 0) + 1;
+    updateUnreadBadge(name);
+}
+
+function clearUnread(name) {
+    if (!unreadChatCounts[name]) return;
+    delete unreadChatCounts[name];
+    updateUnreadBadge(name);
+}
+
+function updateUnreadBadge(name) {
+    // Find the user card by matching the name text — avoid full re-render
+    const cards = document.querySelectorAll('#onlineList .user-card:not(.is-me)');
+    cards.forEach(card => {
+        const nameEl = card.querySelector('div[style*="font-size:12px"]');
+        if (!nameEl) return;
+        const cardName = nameEl.innerText?.replace('(You)', '').trim();
+        if (cardName !== name) return;
+
+        let badge = card.querySelector('.unread-badge');
+        const count = unreadChatCounts[name] || 0;
+
+        if (count > 0) {
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.className = 'unread-badge';
+                badge.style.cssText = 'position:absolute;top:6px;right:6px;min-width:16px;height:16px;background:var(--purple);border-radius:99px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;font-weight:700;color:#fff;padding:0 4px;pointer-events:none;animation:unreadPop 0.2s cubic-bezier(0.34,1.6,0.64,1);';
+                card.appendChild(badge);
+            }
+            badge.innerText = count > 99 ? '99+' : count;
+        } else {
+            if (badge) badge.remove();
+        }
+    });
+}
 
 window.setChatTarget = function (targetName) {
     // Stop typing for previous chat if switching
@@ -1137,6 +1182,7 @@ window.setChatTarget = function (targetName) {
         clearTypingState();
     }
     activeChatTargetName = targetName;
+    clearUnread(targetName);
     document.getElementById('chatTargetName').innerText = targetName;
 
     const chatBox = document.getElementById('chatBox');
@@ -1257,6 +1303,7 @@ window.zorgSocket.on('receive-private-msg', (msgObj) => {
         const safeName = msgObj.from.replace(/'/g, "\\'");
 
         if (activeChatTargetName !== msgObj.from) {
+            incrementUnread(msgObj.from);
             showToast(`<span style="color:#7c82a0;font-size:10px;font-family:'Space Mono',monospace;display:block;margin-bottom:3px;">From ${msgObj.from} · click to open</span>${msgObj.text}`, 'whisper', `setChatTarget('${safeName}')`);
             addNotification(`Message: ${msgObj.from}`, msgObj.text, false);
         }
