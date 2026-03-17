@@ -1426,3 +1426,133 @@ window.zorgSocket.on('remove-bulletin', (id) => {
     const pinEl = document.getElementById(`pin-${id}`);
     if (pinEl) pinEl.remove();
 });
+
+// =============================================
+// HOMEPAGE — Dashboard / Stats
+// =============================================
+
+const RECENT_KEY = 'zorg_recent_engines';
+
+function getRecentEngines() {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; }
+}
+
+function pushRecentEngine(id, name) {
+    let list = getRecentEngines().filter(e => e.id !== id);
+    list.unshift({ id, name });
+    if (list.length > 5) list = list.slice(0, 5);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+}
+
+function renderHomeRecentEngines() {
+    const container = document.getElementById('homeRecentEngines');
+    if (!container) return;
+    const list = getRecentEngines();
+
+    if (list.length === 0) {
+        container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted);font-family:var(--font-mono);font-size:10px;">No recent engines — start your first scrape above.</div>`;
+        return;
+    }
+
+    container.innerHTML = list.map(e => `
+        <div class="engine-quick-item" onclick="quickLaunchEngine('${e.id}','${e.name.replace(/'/g,"\\'")}')">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:28px;height:28px;background:var(--accent-soft);border:1px solid rgba(99,130,255,0.2);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="var(--accent)" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                </div>
+                <span style="font-size:13px;font-weight:600;color:var(--text-primary);">${e.name}</span>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="var(--text-muted)" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+            </svg>
+        </div>
+    `).join('');
+}
+
+function syncHomeStats() {
+    const sc = document.getElementById('homeScrapeCount');
+    if (sc) sc.innerText = zScrapeCount;
+
+    const ec = document.getElementById('homeEngineCount');
+    const badge = document.getElementById('engineCountBadge');
+    if (ec && badge) ec.innerText = badge.innerText || '0';
+
+    const oc = document.getElementById('homeOnlineCount');
+    if (oc) oc.innerText = currentOnlineUsers.length || '0';
+}
+
+function goToScraper(engineId, engineName) {
+    const home = document.getElementById('homePage');
+    const scraper = document.getElementById('scraperView');
+
+    home.classList.add('view-hidden');
+    scraper.classList.remove('view-hidden');
+
+    // Re-trigger animation
+    scraper.classList.remove('home-in');
+    void scraper.offsetWidth;
+    scraper.classList.add('home-in');
+
+    if (engineId) {
+        document.getElementById('mode').value = engineId;
+        document.getElementById('dropdownBtnText').innerText = engineName;
+        window.zorgSocket.emit('update-viewing', engineName);
+        toggle();
+    }
+}
+
+function goToHome() {
+    const home = document.getElementById('homePage');
+    const scraper = document.getElementById('scraperView');
+
+    scraper.classList.add('view-hidden');
+    home.classList.remove('view-hidden');
+
+    home.classList.remove('home-in');
+    void home.offsetWidth;
+    home.classList.add('home-in');
+
+    syncHomeStats();
+    renderHomeRecentEngines();
+}
+
+function quickLaunchEngine(id, name) {
+    pushRecentEngine(id, name);
+    goToScraper(id, name);
+}
+
+// Wrap selectEngine to track recents (defined earlier in the file)
+const _selectEngineOrig = selectEngine;
+selectEngine = function(id, name) {
+    pushRecentEngine(id, name);
+    _selectEngineOrig(id, name);
+};
+
+// Wrap incrementScrapeCount to keep home stat in sync
+const _incrementScrapeCountOrig = incrementScrapeCount;
+incrementScrapeCount = function() {
+    _incrementScrapeCountOrig();
+    const sc = document.getElementById('homeScrapeCount');
+    if (sc) sc.innerText = zScrapeCount;
+};
+
+// Keep online count stat live whenever the user list updates
+window.zorgSocket.on('online-users', () => {
+    const oc = document.getElementById('homeOnlineCount');
+    if (oc) oc.innerText = currentOnlineUsers.length || '0';
+});
+
+// Sync stats after init-data fills in engineCount and user data
+window.zorgSocket.on('init-data', () => {
+    // Small delay so engineCountBadge is already updated
+    setTimeout(() => {
+        syncHomeStats();
+        renderHomeRecentEngines();
+    }, 50);
+});
+
+// Initial render on page load
+syncHomeStats();
+renderHomeRecentEngines();

@@ -517,6 +517,85 @@
             animation: highlightPulse 2.5s ease-out;
         }
 
+        /* Homepage transitions */
+        @keyframes homeIn {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .home-in {
+            animation: homeIn 0.4s ease forwards;
+        }
+        .view-hidden {
+            display: none !important;
+        }
+
+        /* Stat card */
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            transition: border-color 0.2s, transform 0.2s;
+            cursor: default;
+        }
+        .stat-card:hover {
+            border-color: rgba(255,255,255,0.13);
+            transform: translateY(-2px);
+        }
+        .stat-value {
+            font-family: var(--font-display);
+            font-size: 38px;
+            letter-spacing: 0.04em;
+            line-height: 1;
+        }
+        .stat-label {
+            font-family: var(--font-mono);
+            font-size: 9px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        /* Engine quick-launch item */
+        .engine-quick-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 11px 14px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, transform 0.15s;
+        }
+        .engine-quick-item:hover {
+            background: var(--bg-raised);
+            border-color: rgba(99,130,255,0.3);
+            transform: translateX(3px);
+        }
+
+        /* Scraper view back button */
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            margin-bottom: 20px;
+            transition: color 0.15s;
+        }
+        .back-btn:hover { color: var(--accent); }
+
         /* Collapsed width anim */
         .collapsible {
             overflow: hidden;
@@ -957,17 +1036,76 @@
         <!-- ========= CENTER MAIN ========= -->
         <main style="padding:32px 40px;display:flex;flex-direction:column;align-items:center;">
 
-            <!-- Page header -->
-            <div style="width:100%;max-width:540px;margin-bottom:28px;">
-                <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:4px;">
-                    <h1
-                        style="font-family:var(--font-display);font-size:52px;letter-spacing:0.06em;line-height:1;color:var(--accent);">
-                        ARCHITECT</h1>
-                    <span class="badge badge-accent" style="margin-bottom:10px;">v6.0 MODULAR</span>
+            <!-- ===== HOMEPAGE VIEW ===== -->
+            <div id="homePage" style="width:100%;max-width:560px;">
+
+                <!-- Hero -->
+                <div style="margin-bottom:36px;" class="home-in">
+                    <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:6px;">
+                        <h1 style="font-family:var(--font-display);font-size:56px;letter-spacing:0.06em;line-height:1;color:var(--accent);">ARCHITECT</h1>
+                        <span class="badge badge-accent" style="margin-bottom:12px;">v6.0 MODULAR</span>
+                    </div>
+                    <p style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:0.15em;">STANDARDIZER ACTIVE — DEDUPLICATION ENGINE ONLINE</p>
                 </div>
-                <p style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:0.15em;">
-                    STANDARDIZER ACTIVE — DEDUPLICATION ENGINE ONLINE</p>
+
+                <!-- Stat cards -->
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px;" class="home-in" id="homeStatsGrid">
+                    <div class="stat-card">
+                        <div class="stat-value" style="color:var(--accent);" id="homeScrapeCount">0</div>
+                        <div class="stat-label">Scrapes Today</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" style="color:var(--emerald);" id="homeEngineCount">0</div>
+                        <div class="stat-label">Engines Loaded</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" style="color:var(--purple);" id="homeOnlineCount">0</div>
+                        <div class="stat-label">Online Now</div>
+                    </div>
+                </div>
+
+                <!-- CTA -->
+                <button onclick="goToScraper()" class="btn-primary home-in" style="width:100%;padding:18px;font-size:16px;letter-spacing:0.1em;margin-bottom:24px;display:flex;align-items:center;justify-content:center;gap:10px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    Start New Scrape
+                </button>
+
+                <!-- Quick Launch -->
+                <div class="home-in">
+                    <div class="section-label" style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Quick Launch — Recent Engines
+                    </div>
+                    <div id="homeRecentEngines" style="display:flex;flex-direction:column;gap:8px;">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
             </div>
+
+            <!-- ===== SCRAPER VIEW ===== -->
+            <div id="scraperView" class="view-hidden" style="width:100%;max-width:540px;">
+
+                <!-- Back button -->
+                <button onclick="goToHome()" class="back-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                    Dashboard
+                </button>
+
+                <!-- Page header (scraper) -->
+                <div style="margin-bottom:28px;">
+                    <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:4px;">
+                        <h1 style="font-family:var(--font-display);font-size:52px;letter-spacing:0.06em;line-height:1;color:var(--accent);">ARCHITECT</h1>
+                        <span class="badge badge-accent" style="margin-bottom:10px;">v6.0 MODULAR</span>
+                    </div>
+                    <p style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:0.15em;">STANDARDIZER ACTIVE — DEDUPLICATION ENGINE ONLINE</p>
+                </div>
 
             <!-- Main card -->
             <div class="card" style="width:100%;max-width:540px;padding:28px;">
@@ -1159,6 +1297,7 @@
                         BY YAHIAH</span>
                 </div>
             </div>
+            </div><!-- /scraperView -->
         </main>
 
         <!-- ========= RIGHT SIDEBAR ========= -->

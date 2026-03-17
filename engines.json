@@ -96,5 +96,12 @@
     "instruction": "F12 → Network tab → Reload the floorplan page → Filter by api/exhibitor → Right-click the request → Copy as cURL (bash) → Paste here.",
     "inputType": "cURL Command",
     "category": "General"
+  },
+  {
+    "id": "electramining",
+    "name": "Electra Mining",
+    "instruction": "",
+    "inputType": "",
+    "category": "Custom"
   }
 ]
