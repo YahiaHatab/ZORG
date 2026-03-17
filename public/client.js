@@ -60,6 +60,7 @@ window.zorgSocket.on('init-data', (data) => {
         if (adminPanel) adminPanel.style.display = 'flex';
         const bulletinAddBtn = document.getElementById('bulletinAddBtn');
         if (bulletinAddBtn) bulletinAddBtn.style.display = 'flex';
+        updatePaletteFooterHints();
     }
 
     // 3. Render Logs
@@ -114,20 +115,24 @@ function extractEnginesFromHTML() {
     const items = document.querySelectorAll('#engineListContainer .dropdown-engine-item');
     const engines = [];
     items.forEach(el => {
-        const id   = el.getAttribute('onclick')?.match(/selectEngine\('([^']+)'/)?.[1];
-        const name = el.getAttribute('data-engine-name');  // lowercase name attr
-        // grab display name from the span inside
-        const displayName = el.querySelector('span')?.innerText?.trim() || name;
-        // category: find parent cat div
+        const id = el.getAttribute('onclick')?.match(/selectEngine\('([^']+)'/)?.[1];
         const catDiv = el.closest('[id^="cat-"]');
         const category = catDiv ? catDiv.id.replace('cat-', '') : 'General';
-        const isCustom = el.querySelector('.palette-dot')?.style?.background?.includes('b97cf3') ||
-                         el.querySelector('span[style*="b97cf3"]') !== null;
-        if (id && displayName) engines.push({ id, name: displayName, category, isCustom });
+        // Display name: the text node inside the inner div, stripping the dot span
+        const innerDiv = el.querySelector('div');
+        const displayName = innerDiv ? innerDiv.innerText?.trim() : el.getAttribute('data-engine-name') || '';
+        // isCustom: purple dot
+        const dotSpan = el.querySelector('span[style*="b97cf3"]');
+        const isCustom = !!dotSpan;
+        // Admin action buttons
+        const actionBtns = el.querySelector('.action-btns');
+        const hasEdit   = !!actionBtns?.querySelector('[title="Edit"]');
+        const hasDelete = !!actionBtns?.querySelector('[title="Delete"]');
+        if (id && displayName) engines.push({ id, name: displayName, category, isCustom, hasEdit, hasDelete });
     });
 
-    // Also include built-in engines that might not be in server HTML
-    const builtins = [
+    // Built-in fallback — check each one against the server HTML too
+    const builtinDefs = [
         { id: 'marketplace', name: 'Map-Dynamics (Marketplace)', category: 'General', isCustom: false },
         { id: 'dusseldorf',  name: 'Messe Düsseldorf',           category: 'General', isCustom: false },
         { id: 'algolia',     name: 'NürnbergMesse (Algolia)',     category: 'General', isCustom: false },
@@ -135,8 +140,12 @@ function extractEnginesFromHTML() {
         { id: 'eshow',       name: 'eShow (Concurrent)',          category: 'General', isCustom: false },
         { id: 'cadmium',     name: 'Cadmium (Harvester)',         category: 'General', isCustom: false },
     ];
-    builtins.forEach(b => {
-        if (!engines.find(e => e.id === b.id)) engines.unshift(b);
+    builtinDefs.forEach(b => {
+        if (!engines.find(e => e.id === b.id)) {
+            const serverEl = document.querySelector(`#engineListContainer .dropdown-engine-item[onclick*="'${b.id}'"]`);
+            const ab = serverEl?.querySelector('.action-btns');
+            engines.unshift({ ...b, hasEdit: !!ab?.querySelector('[title="Edit"]'), hasDelete: !!ab?.querySelector('[title="Delete"]') });
+        }
     });
 
     return engines;
@@ -217,6 +226,7 @@ function openCommandPalette() {
     palette.classList.add('open');
     setTimeout(() => document.getElementById('paletteInput').focus(), 40);
     document.body.classList.add('modal-open');
+    updatePaletteFooterHints();
 }
 
 function closeCommandPalette() {
@@ -273,11 +283,16 @@ function renderPaletteList(engines, highlight = '') {
                         e.name.slice(idx + highlight.length);
                 }
             }
+            const editBtn = e.hasEdit ? `<button onclick="event.stopPropagation();editEngine(event,'${e.id}')" title="Edit" style="opacity:0;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:3px;border-radius:4px;display:flex;align-items:center;transition:opacity 0.1s,color 0.1s;" class="palette-admin-btn" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>` : '';
+            const delBtn = e.hasDelete ? `<button onclick="event.stopPropagation();deleteEngine(event,'${e.id}')" title="Delete" style="opacity:0;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:3px;border-radius:4px;display:flex;align-items:center;transition:opacity 0.1s,color 0.1s;" class="palette-admin-btn" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
             html += `<div class="palette-item${selected}" data-palette-index="${flatIndex}"
-                onclick="paletteSelectEngine('${e.id}','${safeName}')">
+                onclick="paletteSelectEngine('${e.id}','${safeName}')"
+                onmouseenter="this.querySelectorAll('.palette-admin-btn').forEach(b=>b.style.opacity='1')"
+                onmouseleave="this.querySelectorAll('.palette-admin-btn').forEach(b=>b.style.opacity='0')">
                 <div style="width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0;"></div>
                 <span class="palette-item-name">${displayName}</span>
                 <span class="palette-item-cat">${cat}</span>
+                ${editBtn}${delBtn}
                 <button class="palette-pin-btn${pinned ? ' pinned' : ''}" data-id="${e.id}"
                     title="${pinned ? 'Unpin' : 'Pin'}"
                     onclick="event.stopPropagation();togglePin('${e.id}','${safeName}',${e.isCustom})">
@@ -330,6 +345,20 @@ function handlePaletteKey(e) {
         if (target) { togglePin(target.id, target.name, target.isCustom); }
         return;
     }
+    if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        const target = paletteIndex >= 0 ? visible[paletteIndex] : null;
+        if (target?.hasEdit) editEngine(e, target.id);
+        return;
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        // Only fire on Backspace if search input is empty (otherwise it's just clearing text)
+        if (e.key === 'Backspace' && document.getElementById('paletteInput').value !== '') return;
+        e.preventDefault();
+        const target = paletteIndex >= 0 ? visible[paletteIndex] : null;
+        if (target?.hasDelete) deleteEngine(e, target.id);
+        return;
+    }
 }
 
 function scrollPaletteSelected() {
@@ -352,6 +381,19 @@ document.addEventListener('keydown', function(e) {
         if (palette?.classList.contains('open')) closeCommandPalette();
     }
 });
+
+// --- Inject admin keyboard hints into palette footer ---
+function updatePaletteFooterHints() {
+    const footer = document.getElementById('paletteFooter');
+    if (!footer || !isUserAdmin) return;
+    // Only inject once
+    if (footer.querySelector('.admin-hint')) return;
+    const hint = (key, label, color) => `<span class="admin-hint" style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:5px;"><span style="background:var(--bg-raised);border:1px solid ${color};border-radius:3px;padding:1px 5px;color:${color};">${key}</span> ${label}</span>`;
+    footer.insertAdjacentHTML('beforeend',
+        hint('E', 'Edit', 'rgba(99,130,255,0.6)') +
+        hint('Del', 'Delete', 'rgba(248,113,113,0.6)')
+    );
+}
 
 // --- Stub out old functions so server-injected HTML doesn't break ---
 function toggleDropdownMenu() { openCommandPalette(); }
@@ -581,6 +623,7 @@ function closeSuccessModal() {
 
 async function editEngine(e, id) {
     e.stopPropagation();
+    closeCommandPalette();
     const pwd = await customPrompt("Verify administrative permission to modify existing framework parameters.", "Security Check");
     if (pwd !== "1532") {
         if (pwd !== null) showToast("Invalid credentials supplied. Access denied.", "error");
@@ -602,7 +645,7 @@ async function editEngine(e, id) {
         document.getElementById('upCode').value = data.code;
 
         document.getElementById('uploadModal').classList.add('open');
-        document.getElementById('dropdownMenu').style.display = 'none';
+        // dropdown replaced by command palette — no action needed
     } catch (err) {
         showToast(err.message, "error");
     }
@@ -610,6 +653,7 @@ async function editEngine(e, id) {
 
 async function deleteEngine(e, id) {
     e.stopPropagation();
+    closeCommandPalette();
     const pwd = await customPrompt("Verify administrative permission to obliterate engine: " + id, "Security Check");
     if (pwd !== "1532") {
         if (pwd !== null) showToast("Invalid credentials supplied. Access denied.", "error");
