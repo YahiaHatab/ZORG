@@ -287,6 +287,15 @@ app.post('/run', async (req, res) => {
         res.setHeader('Access-Control-Expose-Headers', 'X-Record-Count');
         res.setHeader('X-Record-Count', standardizedRecords.length);
         res.send(buf);
+
+        // Notify the user who ran the scraper that it has completed
+        if (socketId && socketId !== "unknown-socket") {
+            io.to(socketId).emit('scraper-complete', {
+                engineName: engName,
+                recordCount: standardizedRecords.length,
+                fileName: fileName || defaultFileName
+            });
+        }
     } catch (err) {
         emitLog(`SYSTEM ERROR: ${err.message}`);
         res.status(500).json({ error: err.message });

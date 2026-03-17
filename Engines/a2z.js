@@ -1,27 +1,33 @@
 /**
- * ZORG-Ω Engine: A2Z / a2zinc General Engine v10
+ * ZORG-Ω Engine: A2Z / a2zinc General Engine v11
  * Platform: a2zinc.net floorplan + SmallWorld detail pages
  *
- * Input:
- *   customInputs[0] — cURL command copied from Network tab
- *                     (Filter "api/exhibitor" → right-click → Copy as cURL bash)
- *
- * Auto-extracted from cURL:
- *   - imgXX host, mapId, eventId, appId, floorplanViewType, langId
- *   - referer → used to derive siteBase AND auto-fetch strBoothClickURL
+ * Inputs:
+ *   customInputs[0] — cURL command (required)
+ *                     F12 → Network → filter "api/exhibitor" → right-click → Copy as cURL (bash)
+ *   customInputs[1] — SmallWorld BoothClick URL (optional, only needed if auto-detection fails)
+ *                     Find it by: opening the floorplan page → F12 → Sources tab →
+ *                     search for "strBoothClickURL" → copy the value (e.g. https://fall2026.smallworldlabs.com/?page_id=2424&boothId=)
  */
 
 const axios = require('axios');
 
 module.exports = async function scrapeA2Z(params, emitLog, runState) {
-    emitLog("⚙️  A2Z Engine v10 initializing...");
+    emitLog("⚙️  A2Z Engine v11 initializing...");
 
-    // ─── 1. PARSE cURL INPUT ──────────────────────────────────────────────────
-    const curlInput = (params.customInputs?.[0] || params.customInput || '').trim();
-    if (!curlInput) throw new Error("Input missing: Paste the cURL command for the api/exhibitor request.");
+    // ─── 1. PARSE INPUTS ──────────────────────────────────────────────────────
+    const curlInput         = (params.customInputs?.[0] || params.customInput || '').trim();
+    let manualBoothClickUrl = (params.customInputs?.[1] || '').trim();
 
-    // Extract the main request URL from cURL (first quoted URL)
-    const curlUrlMatch = curlInput.match(/curl\s+['"]?(https?:\/\/[^\s'"]+)['"]?/i);
+    if (!curlInput) throw new Error("Input 1 missing: Paste the cURL command for the api/exhibitor request.");
+
+    // Auto-decode manual input if URL-encoded
+    if (manualBoothClickUrl && manualBoothClickUrl.includes('%')) {
+        try { manualBoothClickUrl = decodeURIComponent(manualBoothClickUrl); } catch (e) {}
+    }
+
+    // ─── 2. PARSE cURL ────────────────────────────────────────────────────────
+    const curlUrlMatch = curlInput.match(/curl\s+['"]?(https?:\/\/[^\s'"\\]+)['"]?/i);
     if (!curlUrlMatch) throw new Error("Could not find a URL in the pasted cURL command.");
 
     let apiUrl;
@@ -29,65 +35,85 @@ module.exports = async function scrapeA2Z(params, emitLog, runState) {
     catch (e) { throw new Error("Could not parse the URL from cURL command."); }
 
     // Extract referer from cURL headers
-    const refererMatch = curlInput.match(/-H\s+['"]referer:\s*(https?:\/\/[^'"]+)['"]/i);
+    const refererMatch  = curlInput.match(/-H\s+['"]referer:\s*(https?:\/\/[^'"]+)['"]/i);
     const floorplanPage = refererMatch ? refererMatch[1].trim() : null;
-    if (!floorplanPage) throw new Error("Could not find 'referer' header in cURL command. Make sure you copied the full cURL.");
+    if (!floorplanPage) throw new Error("Could not find 'referer' header in cURL. Make sure you copied the full cURL (bash) command.");
 
-    // Parse API params from URL
+    // Parse API params
     const qs         = apiUrl.searchParams;
     const mapId      = qs.get('mapId');
     const eventId    = qs.get('eventId');
     const appId      = qs.get('appId');
     const langId     = qs.get('langId') || '1';
     const fpViewType = qs.get('floorplanViewType') || 'VIEW3';
-    const imgHost    = apiUrl.hostname; // e.g. img14.a2zinc.net
+    const imgHost    = apiUrl.hostname;
 
     if (!mapId || !eventId || !appId) throw new Error("Could not parse mapId/eventId/appId from cURL URL.");
 
-    // Derive siteBase from referer
-    let siteBase;
+    // ─── 3. DERIVE SITE BASE (with fallback) ──────────────────────────────────
+    // Try to extract /clients/ORG/SHOW/public from the referer
+    let siteBase = null;
     try {
         const fpUrl     = new URL(floorplanPage);
         const pathMatch = fpUrl.pathname.match(/^(\/clients\/[^/]+\/[^/]+\/public)/i);
-        if (!pathMatch) throw new Error("Referer URL does not contain /clients/ORG/SHOW/public path.");
-        siteBase = `${fpUrl.protocol}//${fpUrl.host}${pathMatch[1]}`;
-    } catch (e) {
-        throw new Error(`Could not derive site base from referer: ${e.message}`);
-    }
-
-    emitLog(`📡 API: ${imgHost} | mapId=${mapId} | eventId=${eventId}`);
-    emitLog(`🌐 Site base: ${siteBase}`);
-    emitLog(`🔍 Fetching floorplan page to extract strBoothClickURL...`);
-
-    // ─── 2. FETCH FLOORPLAN PAGE → EXTRACT strBoothClickURL ──────────────────
-    const browserHeaders = {
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'accept-language': 'en-US,en;q=0.9',
-        'cache-control': 'no-cache',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36'
-    };
-
-    let boothClickUrl = null;
-    try {
-        const pageResp = await axios.get(floorplanPage, { headers: browserHeaders, timeout: 30000, maxRedirects: 5 });
-        const pageSource = typeof pageResp.data === 'string' ? pageResp.data : JSON.stringify(pageResp.data);
-
-        const boothClickMatch = pageSource.match(/strBoothClickURL\s*=\s*["']([^"']+)["']/i);
-        if (boothClickMatch) {
-            boothClickUrl = boothClickMatch[1].trim();
-            if (boothClickUrl.includes('%')) {
-                try { boothClickUrl = decodeURIComponent(boothClickUrl); } catch (e) {}
-            }
+        if (pathMatch) {
+            siteBase = `${fpUrl.protocol}//${fpUrl.host}${pathMatch[1]}`;
         }
-    } catch (e) {
-        throw new Error(`Could not fetch floorplan page to extract strBoothClickURL: ${e.message}`);
+    } catch (e) {}
+
+    if (siteBase) {
+        emitLog(`🏗️  Site base: ${siteBase}`);
+    } else {
+        emitLog(`⚠️  Could not derive site base from referer — continuing without it (not required for SmallWorld scraping).`);
     }
 
-    if (!boothClickUrl) throw new Error("Could not find strBoothClickURL in floorplan page source.");
+    emitLog(`📡 ${imgHost} | mapId=${mapId} | eventId=${eventId}`);
+    emitLog(`🌐 Floorplan: ${floorplanPage}`);
 
-    emitLog(`✅ strBoothClickURL: ${boothClickUrl}`);
+    // ─── 4. GET strBoothClickURL ──────────────────────────────────────────────
+    let boothClickUrl = null;
 
-    // ─── 3. FETCH EXHIBITOR LIST (JSONP) ──────────────────────────────────────
+    if (manualBoothClickUrl) {
+        // Manual override provided — skip auto-detection
+        boothClickUrl = manualBoothClickUrl;
+        emitLog(`🔗 Using manual BoothClickURL: ${boothClickUrl}`);
+    } else {
+        // Auto-detect from floorplan page source
+        emitLog("🔍 Auto-detecting strBoothClickURL from floorplan page source...");
+        try {
+            const browserHeaders = {
+                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'accept-language': 'en-US,en;q=0.9',
+                'cache-control': 'no-cache',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36'
+            };
+            const pageResp   = await axios.get(floorplanPage, { headers: browserHeaders, timeout: 30000, maxRedirects: 5 });
+            const pageSource = typeof pageResp.data === 'string' ? pageResp.data : JSON.stringify(pageResp.data);
+
+            const boothClickMatch = pageSource.match(/strBoothClickURL\s*=\s*["']([^"']+)["']/i);
+            if (boothClickMatch) {
+                boothClickUrl = boothClickMatch[1].trim();
+                if (boothClickUrl.includes('%')) {
+                    try { boothClickUrl = decodeURIComponent(boothClickUrl); } catch (e) {}
+                }
+                emitLog(`✅ Auto-detected BoothClickURL: ${boothClickUrl}`);
+            } else {
+                emitLog(`⚠️  strBoothClickURL not found in page source.`);
+            }
+        } catch (e) {
+            emitLog(`⚠️  Could not fetch floorplan page: ${e.message}`);
+        }
+
+        if (!boothClickUrl) {
+            throw new Error(
+                "Could not auto-detect strBoothClickURL.\n" +
+                "➡️  Fix: Open the floorplan page → F12 → Sources tab (or Debugger) → " +
+                "search for 'strBoothClickURL' → copy the value → paste it into Input 2 and re-run."
+            );
+        }
+    }
+
+    // ─── 5. FETCH EXHIBITOR LIST (JSONP) ──────────────────────────────────────
     emitLog("📦 Fetching exhibitor list...");
 
     const apiHeaders = {
@@ -117,7 +143,7 @@ module.exports = async function scrapeA2Z(params, emitLog, runState) {
     let exhibitorList = [];
     try {
         const listResp = await axios.get(listUrl.toString(), { headers: apiHeaders, timeout: 30000 });
-        const raw = typeof listResp.data === 'string' ? listResp.data : JSON.stringify(listResp.data);
+        const raw      = typeof listResp.data === 'string' ? listResp.data : JSON.stringify(listResp.data);
         const startIdx = raw.indexOf('[');
         const endIdx   = raw.lastIndexOf(']');
         if (startIdx === -1 || endIdx === -1) throw new Error("Could not locate JSON array in response.");
@@ -129,7 +155,7 @@ module.exports = async function scrapeA2Z(params, emitLog, runState) {
 
     emitLog(`✅ ${exhibitorList.length} exhibitors found.`);
 
-    // ─── 4. HTML PARSING UTILITIES ────────────────────────────────────────────
+    // ─── 6. HTML PARSING UTILITIES ────────────────────────────────────────────
     function stripHtml(str) {
         return str
             .replace(/<br\s*\/?>/gi, ' ')
@@ -157,8 +183,8 @@ module.exports = async function scrapeA2Z(params, emitLog, runState) {
     }
 
     function parseFormatB(html) {
-        const pairs = parseFormatA(html);
-        const contactRe = /<div[^>]*class="[^"]*clickable_card[^"]*"[\s\S]*?<h6[^>]*data-generic-layout="heading"[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i;
+        const pairs      = parseFormatA(html);
+        const contactRe  = /<div[^>]*class="[^"]*clickable_card[^"]*"[\s\S]*?<h6[^>]*data-generic-layout="heading"[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i;
         const contactMatch = html.match(contactRe);
         if (contactMatch) {
             const name = stripHtml(contactMatch[1]).trim();
@@ -190,7 +216,7 @@ module.exports = async function scrapeA2Z(params, emitLog, runState) {
         return extractFields(isFormatB ? parseFormatB(html) : parseFormatA(html));
     }
 
-    // ─── 5. DETAIL PAGE FETCHER ───────────────────────────────────────────────
+    // ─── 7. DETAIL PAGE FETCHER ───────────────────────────────────────────────
     const pageHeaders = {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'accept-language': 'en-US,en;q=0.9',
@@ -213,11 +239,11 @@ module.exports = async function scrapeA2Z(params, emitLog, runState) {
             const html = typeof resp.data === 'string' ? resp.data : JSON.stringify(resp.data);
             if (!/company not found|no exhibitor|not available/i.test(html)) {
                 const fields = parsePage(html);
-                phone       = fields.phone;
-                email       = fields.email;
-                contactName = fields.contactName;
-                address     = fields.address;
-                country     = fields.country;
+                phone        = fields.phone;
+                email        = fields.email;
+                contactName  = fields.contactName;
+                address      = fields.address;
+                country      = fields.country;
             }
         } catch (e) { /* non-fatal */ }
 
@@ -233,7 +259,7 @@ module.exports = async function scrapeA2Z(params, emitLog, runState) {
         };
     }
 
-    // ─── 6. CONCURRENT EXTRACTION LOOP ────────────────────────────────────────
+    // ─── 8. CONCURRENT EXTRACTION LOOP ────────────────────────────────────────
     const CONCURRENCY = 6;
     const DELAY_MS    = 300;
     const rawRecords  = [];

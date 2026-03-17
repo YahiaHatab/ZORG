@@ -107,8 +107,9 @@ window.zorgSocket.on('init-data', (data) => {
 // =============================================
 
 const PINS_KEY = 'zorg_pinned_engines';
-let paletteEngines = [];   // flat array: { id, name, category, isCustom }
-let paletteIndex  = -1;    // keyboard nav cursor
+let paletteEngines = [];      // flat array: { id, name, category, isCustom }
+let paletteIndex  = -1;       // keyboard nav cursor
+let paletteNavigating = false; // true = nav mode (shortcuts active), false = typing mode (shortcuts blocked)
 
 // --- Extract flat engine list from server-rendered HTML ---
 function extractEnginesFromHTML() {
@@ -220,11 +221,17 @@ function renderPinnedBar() {
 function openCommandPalette() {
     paletteEngines = extractEnginesFromHTML();
     paletteIndex = -1;
+    paletteNavigating = false;
     document.getElementById('paletteInput').value = '';
     renderPaletteList(paletteEngines);
     const palette = document.getElementById('commandPalette');
     palette.classList.add('open');
-    setTimeout(() => document.getElementById('paletteInput').focus(), 40);
+    setTimeout(() => {
+        const input = document.getElementById('paletteInput');
+        input.focus();
+        // Re-entering the input always switches back to typing mode
+        input.addEventListener('focus', () => { paletteNavigating = false; }, { passive: true });
+    }, 40);
     document.body.classList.add('modal-open');
     updatePaletteFooterHints();
 }
@@ -287,7 +294,7 @@ function renderPaletteList(engines, highlight = '') {
             const delBtn = e.hasDelete ? `<button onclick="event.stopPropagation();deleteEngine(event,'${e.id}')" title="Delete" style="opacity:0;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:3px;border-radius:4px;display:flex;align-items:center;transition:opacity 0.1s,color 0.1s;" class="palette-admin-btn" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
             html += `<div class="palette-item${selected}" data-palette-index="${flatIndex}"
                 onclick="paletteSelectEngine('${e.id}','${safeName}')"
-                onmouseenter="this.querySelectorAll('.palette-admin-btn').forEach(b=>b.style.opacity='1')"
+                onmouseenter="paletteNavigating=true;document.getElementById('paletteInput').blur();this.querySelectorAll('.palette-admin-btn').forEach(b=>b.style.opacity='1')"
                 onmouseleave="this.querySelectorAll('.palette-admin-btn').forEach(b=>b.style.opacity='0')">
                 <div style="width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0;"></div>
                 <span class="palette-item-name">${displayName}</span>
@@ -325,12 +332,18 @@ function handlePaletteKey(e) {
     if (e.key === 'ArrowDown') {
         e.preventDefault();
         paletteIndex = Math.min(paletteIndex + 1, visible.length - 1);
+        // Switch to nav mode: blur input so shortcuts become active
+        paletteNavigating = true;
+        document.getElementById('paletteInput').blur();
         renderPaletteList(visible, term);
         return;
     }
     if (e.key === 'ArrowUp') {
         e.preventDefault();
         paletteIndex = Math.max(paletteIndex - 1, 0);
+        // Switch to nav mode: blur input so shortcuts become active
+        paletteNavigating = true;
+        document.getElementById('paletteInput').blur();
         renderPaletteList(visible, term);
         return;
     }
@@ -340,6 +353,10 @@ function handlePaletteKey(e) {
         if (target) paletteSelectEngine(target.id, target.name);
         return;
     }
+    // Shortcuts only fire in nav mode (input blurred). While typing mode is active
+    // (input focused / paletteNavigating = false) all letter keys flow into the search box.
+    if (!paletteNavigating) return;
+
     if (e.key === 'p' || e.key === 'P') {
         const target = paletteIndex >= 0 ? visible[paletteIndex] : null;
         if (target) { togglePin(target.id, target.name, target.isCustom); }
@@ -352,8 +369,6 @@ function handlePaletteKey(e) {
         return;
     }
     if (e.key === 'Delete' || e.key === 'Backspace') {
-        // Only fire on Backspace if search input is empty (otherwise it's just clearing text)
-        if (e.key === 'Backspace' && document.getElementById('paletteInput').value !== '') return;
         e.preventDefault();
         const target = paletteIndex >= 0 ? visible[paletteIndex] : null;
         if (target?.hasDelete) deleteEngine(e, target.id);
@@ -366,8 +381,18 @@ function scrollPaletteSelected() {
     if (sel) sel.scrollIntoView({ block: 'nearest' });
 }
 
-// --- Global '/' hotkey to open palette (only when scraper view is visible) ---
+// --- Global Hotkeys & Palette Event Routing ---
 document.addEventListener('keydown', function(e) {
+    const palette = document.getElementById('commandPalette');
+    const isPaletteOpen = palette?.classList.contains('open');
+
+    // 1. If the palette is open, route EVERYTHING to handlePaletteKey
+    if (isPaletteOpen) {
+        handlePaletteKey(e);
+        return; 
+    }
+
+    // 2. If the palette is closed, listen for the '/' hotkey to open it
     if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
         const scraper = document.getElementById('scraperView');
         if (!scraper || scraper.classList.contains('view-hidden')) return;
@@ -375,10 +400,6 @@ document.addEventListener('keydown', function(e) {
         if (tag === 'INPUT' || tag === 'TEXTAREA') return;
         e.preventDefault();
         openCommandPalette();
-    }
-    if (e.key === 'Escape') {
-        const palette = document.getElementById('commandPalette');
-        if (palette?.classList.contains('open')) closeCommandPalette();
     }
 });
 
@@ -1476,6 +1497,25 @@ async function triggerGlobalRefresh() {
         toggleAdminPanel(); // Close the panel
     }
 }
+
+window.zorgSocket.on('scraper-complete', ({ engineName, recordCount, fileName }) => {
+    // Toast notification
+    showToast(
+        `<span style="color:#7c82a0;font-size:10px;font-family:'Space Mono',monospace;display:block;margin-bottom:3px;">${engineName} · ${recordCount.toLocaleString()} records</span>Scrape complete — ${fileName}.xlsx ready`,
+        'success'
+    );
+
+    // Bell panel notification
+    addNotification(`Scrape Complete: ${engineName}`, `${recordCount.toLocaleString()} records extracted into ${fileName}.xlsx`, false);
+
+    // Browser push notification (when tab is in background)
+    if (document.visibilityState === 'hidden' && "Notification" in window && Notification.permission === "granted") {
+        new Notification("ZORG-Ω · Scrape Complete", {
+            body: `${engineName}: ${recordCount.toLocaleString()} records ready.`,
+            icon: '/Icons/favicon.ico'
+        });
+    }
+});
 
 window.zorgSocket.on('execute-global-refresh', (timestamp) => {
     showToast("Admin initiated global sync. Reloading...", "whisper");

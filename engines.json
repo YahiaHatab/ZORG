@@ -93,8 +93,8 @@
   {
     "id": "a2z",
     "name": "A2Z FloorPlan",
-    "instruction": "F12 → Network tab → Reload the floorplan page → Filter by api/exhibitor → Right-click the request → Copy as cURL (bash) → Paste here.",
-    "inputType": "cURL Command",
+    "instruction": "Input 1 (required): F12 → Network → filter api/exhibitor → right-click → Copy as cURL (bash) → paste here.\nInput 2 (only if run fails): Open the floorplan page → F12 → Sources tab → search for strBoothClickURL → copy the value (e.g. https://fall2026.smallworldlabs.com/?page_id=2424&boothId=) → paste here and re-run.",
+    "inputType": "cURL Command, strBoothClickURL",
     "category": "General"
   },
   {
@@ -103,5 +103,12 @@
     "instruction": "",
     "inputType": "",
     "category": "Custom"
+  },
+  {
+    "id": "lasvegasmarket",
+    "name": "LasVegas Market",
+    "instruction": "",
+    "inputType": "cURL (bash)",
+    "category": "General"
   }
 ]
