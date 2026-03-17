@@ -294,7 +294,7 @@ function renderPaletteList(engines, highlight = '') {
             const delBtn = e.hasDelete ? `<button onclick="event.stopPropagation();deleteEngine(event,'${e.id}')" title="Delete" style="opacity:0;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:3px;border-radius:4px;display:flex;align-items:center;transition:opacity 0.1s,color 0.1s;" class="palette-admin-btn" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
             html += `<div class="palette-item${selected}" data-palette-index="${flatIndex}"
                 onclick="paletteSelectEngine('${e.id}','${safeName}')"
-                onmouseenter="paletteNavigating=true;document.getElementById('paletteInput').blur();this.querySelectorAll('.palette-admin-btn').forEach(b=>b.style.opacity='1')"
+                onmouseenter="this.querySelectorAll('.palette-admin-btn').forEach(b=>b.style.opacity='1')"
                 onmouseleave="this.querySelectorAll('.palette-admin-btn').forEach(b=>b.style.opacity='0')">
                 <div style="width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0;"></div>
                 <span class="palette-item-name">${displayName}</span>
@@ -326,8 +326,6 @@ function handlePaletteKey(e) {
     const visible = term
         ? paletteEngines.filter(en => en.name.toLowerCase().includes(term) || en.category.toLowerCase().includes(term))
         : paletteEngines;
-
-    if (e.key === 'Escape') { closeCommandPalette(); return; }
 
     if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -381,18 +379,71 @@ function scrollPaletteSelected() {
     if (sel) sel.scrollIntoView({ block: 'nearest' });
 }
 
-// --- Global Hotkeys & Palette Event Routing ---
+// --- Global Hotkeys & Event Routing ---
 document.addEventListener('keydown', function(e) {
+    
+    // --- 1. CASCADING ESCAPE (Close top-most UI element) ---
+    if (e.key === 'Escape') {
+        // Custom Dialog (Confirm / Prompt)
+        const customDialog = document.getElementById('customDialogModal');
+        if (customDialog?.classList.contains('open')) {
+            document.getElementById('dialogCancelBtn')?.click();
+            return;
+        }
+
+        // Avatar Color Picker
+        const colorPicker = document.getElementById('colorPickerPopup');
+        if (colorPicker) {
+            colorPicker.remove();
+            return;
+        }
+
+        // Command Palette
+        const palette = document.getElementById('commandPalette');
+        if (palette?.classList.contains('open')) {
+            closeCommandPalette();
+            return;
+        }
+
+        // Upload Modal
+        const uploadModal = document.getElementById('uploadModal');
+        if (uploadModal?.classList.contains('open')) {
+            closeUploadModal();
+            return;
+        }
+
+        // Success Modal
+        const successModal = document.getElementById('successModal');
+        if (successModal?.classList.contains('open')) {
+            closeSuccessModal();
+            return;
+        }
+
+        // Notification Panel
+        const notifPanel = document.getElementById('notificationPanel');
+        if (notifPanel?.style.opacity === '1') {
+            toggleNotifications();
+            return;
+        }
+
+        // Chat Box
+        const chatBox = document.getElementById('chatBox');
+        if (chatBox?.style.display === 'flex') {
+            closeChat();
+            return;
+        }
+    }
+
+    // --- 2. COMMAND PALETTE ROUTING ---
     const palette = document.getElementById('commandPalette');
     const isPaletteOpen = palette?.classList.contains('open');
 
-    // 1. If the palette is open, route EVERYTHING to handlePaletteKey
     if (isPaletteOpen) {
         handlePaletteKey(e);
         return; 
     }
 
-    // 2. If the palette is closed, listen for the '/' hotkey to open it
+    // --- 3. QUICK OPEN PALETTE ('/') ---
     if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
         const scraper = document.getElementById('scraperView');
         if (!scraper || scraper.classList.contains('view-hidden')) return;
@@ -400,6 +451,40 @@ document.addEventListener('keydown', function(e) {
         if (tag === 'INPUT' || tag === 'TEXTAREA') return;
         e.preventDefault();
         openCommandPalette();
+        return;
+    }
+
+    // --- 4. EXECUTE SCRAPE (Ctrl+Enter or Cmd+Enter) ---
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        const scraper = document.getElementById('scraperView');
+        if (scraper && !scraper.classList.contains('view-hidden')) {
+            const btn = document.getElementById('btn');
+            if (btn && !btn.disabled) {
+                e.preventDefault();
+                run();
+            }
+        }
+        return;
+    }
+
+    // --- 5. ENTER KEY SUBMISSIONS FOR SPECIFIC INPUTS ---
+    if (e.key === 'Enter') {
+        const activeId = document.activeElement?.id;
+
+        if (activeId === 'loginName') {
+            e.preventDefault();
+            handleLogin();
+        } else if (activeId === 'chatInput') {
+            e.preventDefault();
+            sendChatMessage();
+        } else if (activeId === 'adminUpdateText') {
+            e.preventDefault();
+            broadcastUpdate();
+        } else if (activeId === 'bulletinTextInput' && !e.shiftKey) {
+            // Allows Shift+Enter for new line, standard Enter to submit
+            e.preventDefault();
+            submitBulletin();
+        }
     }
 });
 
