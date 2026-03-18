@@ -863,4 +863,24 @@ io.on('connection', (socket) => {
 // Serve frontend
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 ZORG-Ω Architect Online: http://localhost:${PORT}`));
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 ZORG-Ω Architect Online: http://localhost:${PORT}`);
+    
+    // --- PERIODIC RESOURCE PULSE ---
+    setInterval(() => {
+        const [load1] = os.loadavg();
+        const cpuCount = os.cpus().length || 1;
+        const loadPercent = Math.min(load1 / cpuCount, 1);
+        const totalMem = os.totalmem();
+        const freeMem = os.freemem();
+        const memPercent = (totalMem - freeMem) / totalMem;
+        
+        // Composite score: 60% CPU, 40% RAM
+        const composite = loadPercent * 0.6 + memPercent * 0.4;
+        
+        io.emit('resource-pulse', {
+            load: parseFloat(composite.toFixed(3)),
+            activeScrapes: activeScrapeCount
+        });
+    }, 5000);
+});

@@ -639,6 +639,7 @@
         /* Select */
         select.inp {
             -webkit-appearance: none;
+            appearance: none;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237c82a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: right 14px center;
@@ -1350,6 +1351,20 @@
                     <div
                         style="text-align:center;padding:12px;color:var(--text-muted);font-family:var(--font-mono);font-size:10px;">
                         All engines idle.</div>
+                </div>
+            </div>
+            <!-- Server Resource Pulse -->
+            <div style="flex-shrink:0;margin-top:auto;padding-top:16px;border-top:1px solid var(--border);">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                    <div class="sidebar-title" style="color:var(--text-muted);font-size:8px;">Server Resource Pulse</div>
+                    <div id="pulseStatusText" style="font-family:var(--font-mono);font-size:8px;text-transform:uppercase;color:var(--emerald);letter-spacing:0.05em;">Healthy</div>
+                </div>
+                <div style="height:4px;background:var(--bg-raised);border-radius:2px;overflow:hidden;display:flex;">
+                    <div id="pulseBar" style="width:0%;height:100%;background:var(--emerald);transition:width 1s ease, background 1s ease;"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:6px;font-family:var(--font-mono);font-size:8px;color:var(--text-muted);">
+                    <span id="pulseLoadText">Load: 0.0%</span>
+                    <span id="activeScrapesText">Scrapes: 0</span>
                 </div>
             </div>
         </aside>

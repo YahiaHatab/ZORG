@@ -978,7 +978,7 @@ async function run() {
                 }
             }
         } catch (e) { }
-    }, 800);
+    }, 1500);
 
     try {
         abortController = new AbortController();
@@ -1671,6 +1671,34 @@ window.zorgSocket.on('execute-global-refresh', (timestamp) => {
         currentUrl.searchParams.set('v', timestamp);
         window.location.href = currentUrl.toString();
     }, 1500);
+});
+
+window.zorgSocket.on('resource-pulse', (data) => {
+    const pulseBar = document.getElementById('pulseBar');
+    const pulseLoadText = document.getElementById('pulseLoadText');
+    const pulseStatusText = document.getElementById('pulseStatusText');
+    const activeScrapesText = document.getElementById('activeScrapesText');
+
+    if (!pulseBar || !pulseLoadText || !pulseStatusText || !activeScrapesText) return;
+
+    const load = data.load * 100;
+    pulseBar.style.width = load + '%';
+    pulseLoadText.innerText = `Load: ${load.toFixed(1)}%`;
+    activeScrapesText.innerText = `Scrapes: ${data.activeScrapes}`;
+
+    if (load > 85) {
+        pulseBar.style.background = 'var(--red)';
+        pulseStatusText.innerText = 'Critical';
+        pulseStatusText.style.color = 'var(--red)';
+    } else if (load > 50) {
+        pulseBar.style.background = 'var(--amber)';
+        pulseStatusText.innerText = 'Busy';
+        pulseStatusText.style.color = 'var(--amber)';
+    } else {
+        pulseBar.style.background = 'var(--emerald)';
+        pulseStatusText.innerText = 'Healthy';
+        pulseStatusText.style.color = 'var(--emerald)';
+    }
 });
 
 async function deleteSystemLog(logId) {
