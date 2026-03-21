@@ -215,10 +215,10 @@ function renderPinnedBar() {
         const isActive = p.id === activeId;
         const safeId = JSON.stringify(p.id);
         const safeName = JSON.stringify(p.name);
-        return `<div class="pin-chip${isActive ? ' active' : ''}" onclick="selectEngine(${safeId},${safeName})">
+        return `<div class="pin-chip${isActive ? ' active' : ''}" onclick='selectEngine(${safeId},${safeName})'>
             <div class="pin-chip-dot" style="background:${dotColor};"></div>
             <span>${p.name}</span>
-            <span class="pin-chip-unpin" onclick="event.stopPropagation();togglePin(${safeId},${safeName},${p.isCustom})" title="Unpin">
+            <span class="pin-chip-unpin" onclick='event.stopPropagation();togglePin(${safeId},${safeName},${p.isCustom})' title="Unpin">
                 <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
@@ -301,10 +301,10 @@ function renderPaletteList(engines, highlight = '') {
                     `<span style="color:var(--accent);background:var(--accent-soft);border-radius:2px;">${e.name.slice(idx, idx + highlight.length)}</span>` +
                     e.name.slice(idx + highlight.length);
             }
-            const editBtn = e.hasEdit ? `<button onclick="event.stopPropagation();editEngine(event,${safeId})" title="Edit" style="opacity:0;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:3px;border-radius:4px;display:flex;align-items:center;transition:opacity 0.1s,color 0.1s;" class="palette-admin-btn" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>` : '';
-            const delBtn = e.hasDelete ? `<button onclick="event.stopPropagation();deleteEngine(event,${safeId})" title="Delete" style="opacity:0;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:3px;border-radius:4px;display:flex;align-items:center;transition:opacity 0.1s,color 0.1s;" class="palette-admin-btn" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
+            const editBtn = e.hasEdit ? `<button onclick='event.stopPropagation();editEngine(event,${safeId})' title="Edit" style="opacity:0;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:3px;border-radius:4px;display:flex;align-items:center;transition:opacity 0.1s,color 0.1s;" class="palette-admin-btn" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>` : '';
+            const delBtn = e.hasDelete ? `<button onclick='event.stopPropagation();deleteEngine(event,${safeId})' title="Delete" style="opacity:0;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:3px;border-radius:4px;display:flex;align-items:center;transition:opacity 0.1s,color 0.1s;" class="palette-admin-btn" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-muted)'"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>` : '';
             html += `<div class="palette-item${selected}" data-palette-index="${flatIndex}"
-                onclick="paletteSelectEngine(${safeId},${safeName})"
+                onclick='paletteSelectEngine(${safeId},${safeName})'
                 onmouseenter="this.querySelectorAll('.palette-admin-btn').forEach(b=>b.style.opacity='1')"
                 onmouseleave="this.querySelectorAll('.palette-admin-btn').forEach(b=>b.style.opacity='0')">
                 <div style="width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0;"></div>
@@ -313,7 +313,7 @@ function renderPaletteList(engines, highlight = '') {
                 ${editBtn}${delBtn}
                 <button class="palette-pin-btn${pinned ? ' pinned' : ''}" data-id="${e.id}"
                     title="${pinned ? 'Unpin' : 'Pin'}"
-                    onclick="event.stopPropagation();togglePin(${safeId},${safeName},${e.isCustom})">
+                    onclick='event.stopPropagation();togglePin(${safeId},${safeName},${e.isCustom})'>
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
                     </svg>
