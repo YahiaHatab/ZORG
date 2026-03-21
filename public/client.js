@@ -2153,3 +2153,18 @@ renderHomeRecentEngines();
         if (document.visibilityState === 'visible') poll();
     }, POLL_INTERVAL);
 })();
+
+function toggleProtocolPanel() {
+    const wrapper = document.getElementById("instructionContentWrapper");
+    const arrow = document.getElementById("instructionArrow");
+    
+    if (!wrapper || !arrow) return;
+    
+    if (wrapper.style.gridTemplateRows === "1fr") {
+        wrapper.style.gridTemplateRows = "0fr";
+        arrow.style.transform = "rotate(0deg)";
+    } else {
+        wrapper.style.gridTemplateRows = "1fr";
+        arrow.style.transform = "rotate(180deg)";
+    }
+}
