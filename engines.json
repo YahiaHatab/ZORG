@@ -110,5 +110,26 @@
     "instruction": "",
     "inputType": "cURL (bash)",
     "category": "General"
+  },
+  {
+    "id": "marketplace",
+    "name": "Map-Dynamics (Marketplace)",
+    "instruction": "",
+    "inputType": "",
+    "category": "General"
+  },
+  {
+    "id": "engine_fespa2026",
+    "name": "FESPA 2026 (ExpoPlatform)",
+    "instruction": "Just hit Run. No inputs needed.",
+    "inputType": "",
+    "category": "Custom"
+  },
+  {
+    "id": "zendesk-ekr-vitafoods",
+    "name": "Zendesk Asset Resolver (Vitafoods)",
+    "instruction": "This engine is pre-configured for the Vitafoods exhibitor portal. Just click Run.",
+    "inputType": "",
+    "category": "Custom"
   }
 ]
