@@ -385,22 +385,20 @@
 /* Scrape count tooltip */
 .user-tooltip {
     position: absolute;
-    right: 36px;
+    right: 60px;
     top: 50%;
     transform: translateY(-50%);
     background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 4px 9px;
+    border-radius: 6px;
+    padding: 2px 6px;
     font-family: 'Space Mono', monospace;
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--text-primary);
+    font-size: 8px;
+    color: var(--text-muted);
     white-space: nowrap;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.15s;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
     z-index: 10;
 }
 
@@ -593,3 +591,5 @@ body.modal-open {
     background: #f87171;
     animation: pulseOrbCritical 0.8s ease-in-out infinite;
 }
+
+.user-card:hover .ban-btn { opacity: 1 !important; }

@@ -9,7 +9,49 @@ const http = require('http');
 const { Server } = require('socket.io');
 const multer = require('multer');
 
+const crypto = require('crypto');
 const asyncLocalStorage = new AsyncLocalStorage();
+
+// --- ACCESS CONFIG (password gate) ---
+const configFile = path.join(__dirname, 'config.json');
+let accessConfig = { passwordHash: '' };
+
+function hashPassword(plain) {
+    return crypto.createHash('sha256').update(String(plain)).digest('hex');
+}
+
+function loadConfig() {
+    try {
+        if (!fs.existsSync(configFile)) {
+            // First run — seed with default password "1532"
+            accessConfig = { passwordHash: hashPassword('1532') };
+            fs.writeFileSync(configFile, JSON.stringify(accessConfig, null, 2));
+        } else {
+            accessConfig = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+        }
+    } catch (err) {
+        console.error('Failed to load config.json — using default password:', err);
+        accessConfig = { passwordHash: hashPassword('1532') };
+    }
+}
+loadConfig();
+
+// --- BAN LIST ---
+const bansFile = path.join(__dirname, 'bans.json');
+let bannedIPs = new Set();
+
+function loadBans() {
+    try {
+        if (!fs.existsSync(bansFile)) {
+            fs.writeFileSync(bansFile, JSON.stringify([]));
+        } else {
+            bannedIPs = new Set(JSON.parse(fs.readFileSync(bansFile, 'utf8')));
+        }
+    } catch (err) {
+        console.error('Failed to load bans.json:', err);
+    }
+}
+loadBans();
 
 // --- GLOBAL INTERCEPTORS ---
 axios.interceptors.request.use(config => {
@@ -38,6 +80,16 @@ const PORT = 3000;
 
 app.use(express.static(path.join(__dirname, 'public'))); // CRITICAL: Serves index.html, style.css, client.js
 app.use(express.json());
+
+// --- BAN MIDDLEWARE ---
+app.use((req, res, next) => {
+    let ip = req.socket.remoteAddress || req.ip || '';
+    if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+    if (bannedIPs.has(ip)) {
+        return res.status(403).send('Access denied.');
+    }
+    next();
+});
 
 // --- FILE UPLOAD CONFIGURATION ---
 const uploadDir = path.join(__dirname, 'public', 'uploads');
@@ -115,6 +167,107 @@ app.get('/favicon.ico', (req, res) => {
     const iconPath = path.join(__dirname, 'Icons', 'favicon.ico');
     if (fs.existsSync(iconPath)) res.sendFile(iconPath);
     else res.status(404).end();
+});
+
+// --- ACCESS GATE ROUTES ---
+app.post('/verify-access', (req, res) => {
+    const { passwordHash } = req.body;
+    if (!passwordHash || typeof passwordHash !== 'string') {
+        return res.status(400).json({ error: 'Missing credentials.' });
+    }
+    if (passwordHash === accessConfig.passwordHash) {
+        return res.json({ success: true });
+    }
+    return res.status(401).json({ error: 'Invalid access code.' });
+});
+
+app.post('/admin/change-password', (req, res) => {
+    let ip = req.socket.remoteAddress || req.ip;
+    if (ip && ip.startsWith('::ffff:')) ip = ip.substring(7);
+    const userEntry = savedUsers[ip];
+    if (!userEntry || typeof userEntry !== 'object' || userEntry.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin privileges required.' });
+    }
+
+    const { currentHash, newHash } = req.body;
+    if (!currentHash || !newHash) {
+        return res.status(400).json({ error: 'Missing required fields.' });
+    }
+    if (currentHash !== accessConfig.passwordHash) {
+        return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+    if (newHash.length !== 64) {
+        return res.status(400).json({ error: 'Invalid password format.' });
+    }
+
+    accessConfig.passwordHash = newHash;
+    fs.writeFileSync(configFile, JSON.stringify(accessConfig, null, 2));
+    emitLog(`Admin at ${ip} changed the site access password.`);
+    res.json({ success: true, message: 'Access password updated successfully.' });
+});
+
+// --- BAN MANAGEMENT ROUTES ---
+app.post('/admin/ban-ip', (req, res) => {
+    let ip = req.socket.remoteAddress || req.ip;
+    if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+    const userEntry = savedUsers[ip];
+    if (!userEntry || typeof userEntry !== 'object' || userEntry.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin privileges required.' });
+    }
+
+    const { targetIp } = req.body;
+    if (!targetIp || typeof targetIp !== 'string') {
+        return res.status(400).json({ error: 'Missing target IP.' });
+    }
+    if (targetIp === ip) {
+        return res.status(400).json({ error: 'You cannot ban yourself.' });
+    }
+
+    bannedIPs.add(targetIp);
+    fs.writeFileSync(bansFile, JSON.stringify([...bannedIPs], null, 2));
+
+    // Disconnect the banned user's socket if they're currently online
+    const bannedUser = Object.values(activeUsers).find(u => u.ip === targetIp);
+    if (bannedUser) {
+        io.to(bannedUser.id).emit('force-banned');
+        io.sockets.sockets.get(bannedUser.id)?.disconnect(true);
+    }
+
+    emitLog(`Admin banned IP: ${targetIp}${bannedUser ? ` (${bannedUser.name})` : ''}`);
+    res.json({ success: true, message: `IP ${targetIp} has been banned.` });
+});
+
+app.post('/admin/unban-ip', (req, res) => {
+    let ip = req.socket.remoteAddress || req.ip;
+    if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+    const userEntry = savedUsers[ip];
+    if (!userEntry || typeof userEntry !== 'object' || userEntry.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin privileges required.' });
+    }
+
+    const { targetIp } = req.body;
+    if (!targetIp) return res.status(400).json({ error: 'Missing target IP.' });
+
+    bannedIPs.delete(targetIp);
+    fs.writeFileSync(bansFile, JSON.stringify([...bannedIPs], null, 2));
+
+    emitLog(`Admin unbanned IP: ${targetIp}`);
+    res.json({ success: true, message: `IP ${targetIp} has been unbanned.` });
+});
+
+app.get('/admin/bans', (req, res) => {
+    let ip = req.socket.remoteAddress || req.ip;
+    if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+    const userEntry = savedUsers[ip];
+    if (!userEntry || typeof userEntry !== 'object' || userEntry.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin privileges required.' });
+    }
+    // Enrich each IP with a name if we have one from savedUsers
+    const enriched = [...bannedIPs].map(bannedIp => ({
+        ip: bannedIp,
+        name: savedUsers[bannedIp]?.name || 'Unknown'
+    }));
+    res.json({ bans: enriched });
 });
 
 // --- EXECUTION ROUTE & STANDARDIZER ---
@@ -653,6 +806,13 @@ function generateDynamicEngineData() {
 io.on('connection', (socket) => {
     let ip = socket.handshake.address || '';
     if (ip.startsWith('::ffff:')) ip = ip.substring(7);
+
+    // Reject banned IPs at the socket level too
+    if (bannedIPs.has(ip)) {
+        socket.emit('force-banned');
+        socket.disconnect(true);
+        return;
+    }
 
     let userEntry = savedUsers[ip];
     let uName = "";

@@ -1,3 +1,127 @@
+// =============================================
+// ACCESS GATE — SHA-256 password verification
+// sessionStorage so each new browser session re-prompts.
+// =============================================
+const GATE_SESSION_KEY = 'zorg_access_granted';
+
+async function sha256(plain) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(String(plain));
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function verifyAccessCode() {
+    const input = document.getElementById('accessCodeInput');
+    const errorEl = document.getElementById('accessGateError');
+    const code = input.value.trim();
+
+    if (!code) {
+        input.style.borderColor = 'rgba(248,113,113,0.5)';
+        return;
+    }
+
+    const passwordHash = await sha256(code);
+
+    try {
+        const res = await fetch('/verify-access', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ passwordHash })
+        });
+
+        if (res.ok) {
+            sessionStorage.setItem(GATE_SESSION_KEY, '1');
+            const gate = document.getElementById('accessGate');
+            gate.style.opacity = '0';
+            setTimeout(() => { gate.style.display = 'none'; }, 400);
+            errorEl.style.display = 'none';
+        } else {
+            errorEl.style.display = 'block';
+            input.value = '';
+            input.style.borderColor = 'rgba(248,113,113,0.5)';
+            input.focus();
+            // Shake animation
+            input.style.animation = 'none';
+            void input.offsetWidth;
+            input.style.animation = 'gateShake 0.4s ease';
+        }
+    } catch (err) {
+        errorEl.innerText = '⚠ CONNECTION ERROR — Try again';
+        errorEl.style.display = 'block';
+    }
+}
+
+// Run gate check on page load — skip if already verified this session
+(function initAccessGate() {
+    const gate = document.getElementById('accessGate');
+    if (!gate) return;
+    if (sessionStorage.getItem(GATE_SESSION_KEY) === '1') {
+        gate.style.display = 'none';
+    } else {
+        gate.style.display = 'flex';
+        // Focus after a brief moment so CSS transition plays
+        setTimeout(() => {
+            const input = document.getElementById('accessCodeInput');
+            if (input) input.focus();
+        }, 100);
+    }
+})();
+
+// =============================================
+// CHANGE PASSWORD — Admin UI
+// =============================================
+function openChangePasswordModal() {
+    document.getElementById('cpCurrentPwd').value = '';
+    document.getElementById('cpNewPwd').value = '';
+    document.getElementById('cpConfirmPwd').value = '';
+    document.getElementById('changePasswordModal').classList.add('open');
+    setTimeout(() => document.getElementById('cpCurrentPwd').focus(), 50);
+}
+
+function closeChangePasswordModal() {
+    document.getElementById('changePasswordModal').classList.remove('open');
+}
+
+async function submitChangePassword() {
+    const currentPwd = document.getElementById('cpCurrentPwd').value.trim();
+    const newPwd     = document.getElementById('cpNewPwd').value.trim();
+    const confirmPwd = document.getElementById('cpConfirmPwd').value.trim();
+
+    if (!currentPwd || !newPwd || !confirmPwd) {
+        showToast('All fields are required.', 'error');
+        return;
+    }
+    if (newPwd !== confirmPwd) {
+        showToast('New passwords do not match.', 'error');
+        return;
+    }
+    if (newPwd.length < 4) {
+        showToast('Password must be at least 4 characters.', 'error');
+        return;
+    }
+
+    try {
+        const [currentHash, newHash] = await Promise.all([sha256(currentPwd), sha256(newPwd)]);
+
+        const res = await fetch('/admin/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ currentHash, newHash })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to update password.');
+
+        // Update the session so the current admin isn't locked out
+        sessionStorage.setItem(GATE_SESSION_KEY, '1');
+        closeChangePasswordModal();
+        showToast('Site password updated successfully.', 'success');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
 let searchActive = false;
 let dynamicInstructions = {};
 let dynamicLogic = {};
@@ -39,6 +163,98 @@ let myAvatarColor = localStorage.getItem('zorg_avatar_color') || null;
 
 // --- SOCKET & INIT ---
 window.zorgSocket = io();
+
+// --- BAN HANDLING ---
+window.zorgSocket.on('force-banned', () => {
+    document.body.innerHTML = `
+        <div style="display:flex;height:100vh;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#08090d;font-family:'Space Mono',monospace;">
+            <div style="width:64px;height:64px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);border-radius:16px;display:flex;align-items:center;justify-content:center;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#f87171" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                </svg>
+            </div>
+            <div style="color:#f87171;font-size:22px;letter-spacing:0.1em;">ACCESS REVOKED</div>
+            <div style="color:#3d4260;font-size:10px;letter-spacing:0.15em;">Your access to this network has been terminated.</div>
+        </div>`;
+});
+
+async function banUser(targetIp, targetName) {
+    const confirmed = await customConfirm(
+        `Ban ${targetName} (${targetIp})? They will be immediately disconnected and blocked from reconnecting.`,
+        'Ban User'
+    );
+    if (!confirmed) return;
+
+    try {
+        const res = await fetch('/admin/ban-ip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetIp })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showToast(`${targetName} has been banned.`, 'error');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function openBanManager() {
+    try {
+        const res = await fetch('/admin/bans');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        const bans = data.bans;
+        const listHtml = bans.length === 0
+            ? `<div style="text-align:center;padding:20px;color:#3d4260;font-family:'Space Mono',monospace;font-size:10px;">No banned IPs.</div>`
+            : bans.map(b => `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(248,113,113,0.04);border:1px solid rgba(248,113,113,0.15);border-radius:9px;">
+                    <div>
+                        <div style="font-size:12px;font-weight:600;color:#e8eaf0;">${b.name}</div>
+                        <div style="font-family:'Space Mono',monospace;font-size:9px;color:#7c82a0;margin-top:2px;">${b.ip}</div>
+                    </div>
+                    <button onclick="unbanIP('${b.ip}', this)"
+                        style="background:none;border:1px solid rgba(62,207,142,0.3);border-radius:7px;color:#3ecf8e;font-family:'Space Mono',monospace;font-size:9px;padding:5px 10px;cursor:pointer;letter-spacing:0.1em;text-transform:uppercase;transition:all 0.15s;"
+                        onmouseover="this.style.background='rgba(62,207,142,0.1)'"
+                        onmouseout="this.style.background='none'">Unban</button>
+                </div>`).join('');
+
+        // Reuse the custom dialog modal with custom content
+        const modal = document.getElementById('customDialogModal');
+        document.getElementById('dialogTitle').innerText = 'Ban Manager';
+        document.getElementById('dialogTitle').style.color = '#f87171';
+        document.getElementById('dialogMessage').innerHTML = `<div style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;" id="banList">${listHtml}</div>`;
+        document.getElementById('dialogInput').style.display = 'none';
+        document.getElementById('dialogCancelBtn').style.display = 'none';
+        document.getElementById('dialogConfirmBtn').innerText = 'Close';
+        document.getElementById('dialogConfirmBtn').style.background = '#3d4260';
+        document.getElementById('dialogConfirmBtn').onclick = () => modal.classList.remove('open');
+        modal.classList.add('open');
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
+
+async function unbanIP(ip, btn) {
+    try {
+        const res = await fetch('/admin/unban-ip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetIp: ip })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        btn.closest('div[style]').remove();
+        showToast(`${ip} unbanned.`, 'success');
+        const list = document.getElementById('banList');
+        if (list && !list.querySelector('div[style]')) {
+            list.innerHTML = `<div style="text-align:center;padding:20px;color:#3d4260;font-family:'Space Mono',monospace;font-size:10px;">No banned IPs.</div>`;
+        }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
+}
 
 window.zorgSocket.on('connect', () => {
     console.log('Connected to ZORG-Ω Network.');
@@ -1214,6 +1430,16 @@ function renderOnlineUsers() {
             dotHtml = `<button onclick="toggleStatusManual()" style="background:none;border:none;cursor:pointer;display:flex;padding:0;" title="Toggle Away/Online"><div class="status-dot ${statusClass}" style="pointer-events:none;"></div></button>`;
         }
 
+const banBtn = (!isMe && isUserAdmin)
+    ? `<button onclick="event.stopPropagation();banUser('${u.ip}','${u.name.replace(/'/g,"\\'")}','${u.id}')" title="Ban User"
+        style="background:none;border:none;cursor:pointer;color:#3d4260;padding:2px;display:flex;opacity:0;transition:opacity 0.15s;" class="ban-btn"
+        onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#3d4260'">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+        </svg>
+      </button>`
+    : '';
+
         // Avatar — clickable color picker if it's me
         const avatarStyle = `width:34px;height:34px;border-radius:9px;background:${gradient};border:1.5px solid ${accent}30;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:${accent};flex-shrink:0;transition:all 0.2s;`;
         const avatarHtml = isMe
@@ -1243,6 +1469,7 @@ function renderOnlineUsers() {
                 <div style="font-family:'Space Mono',monospace;font-size:9px;color:#7c82a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;">${statusText}</div>
                 ${viewingBadge}
             </div>
+	    ${banBtn}
             ${dotHtml}
             ${tooltipHtml}
             ${unreadBadge}
