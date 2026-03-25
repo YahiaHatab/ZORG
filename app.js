@@ -36,7 +36,47 @@ const server = http.createServer(app);
 const io = new Server(server);
 const PORT = 3000;
 
-app.use(express.static(path.join(__dirname, 'public'))); // CRITICAL: Serves index.html, style.css, client.js
+// ==========================================
+// --- BAN SYSTEM MIDDLEWARE ---
+// ==========================================
+const bansFile = path.join(__dirname, 'bans.json');
+let bannedIPs = [];
+
+function loadBans() {
+    try {
+        if (!fs.existsSync(bansFile)) {
+            fs.writeFileSync(bansFile, JSON.stringify([]));
+        }
+        bannedIPs = JSON.parse(fs.readFileSync(bansFile, 'utf8'));
+    } catch (err) {
+        console.error("Failed to load bans.json:", err);
+    }
+}
+loadBans();
+
+// The Bouncer: Intercepts all requests
+app.use((req, res, next) => {
+    let ip = req.socket.remoteAddress || req.ip;
+    if (ip && ip.startsWith('::ffff:')) {
+        ip = ip.substring(7); // Clean IPv4-mapped IPv6 addresses
+    }
+
+    if (bannedIPs.includes(ip)) {
+        return res.status(403).send(`
+            <div style="display:flex; height:100vh; align-items:center; justify-content:center; background:#08090d; color:#f87171; font-family:monospace; text-align:center;">
+                <div>
+                    <h1 style="font-size: 40px; margin-bottom: 10px;">403 FORBIDDEN</h1>
+                    <p>Your IP (${ip}) has been permanently restricted from the ZORG-Ω Network.</p>
+                </div>
+            </div>
+        `);
+    }
+    next(); // IP is clean, let them through
+});
+// ==========================================
+
+// CRITICAL: Serves index.html, style.css, client.js
+app.use(express.static(path.join(__dirname, 'public'))); 
 app.use(express.json());
 
 // --- FILE UPLOAD CONFIGURATION ---
@@ -508,6 +548,40 @@ app.post('/admin/clear-logs', (req, res) => {
     systemLogs = [];
     fs.writeFileSync(logsFile, JSON.stringify([]));
     io.emit('clear-logs');
+    res.json({ success: true });
+});
+
+app.post('/admin/ban', (req, res) => {
+    // 1. Verify the requester is an Admin
+    let reqIp = req.socket.remoteAddress || req.ip;
+    if (reqIp && reqIp.startsWith('::ffff:')) reqIp = reqIp.substring(7);
+    
+    let userEntry = savedUsers[reqIp];
+    if (!userEntry || userEntry.role !== 'admin') {
+        return res.status(403).json({ error: "Unauthorized. Admin privileges required." });
+    }
+
+    const { ip } = req.body;
+    if (!ip) return res.status(400).json({ error: "No IP provided." });
+
+    // 2. Add the target IP to bannedIPs array and save to bans.json
+    if (!bannedIPs.includes(ip)) {
+        bannedIPs.push(ip);
+        fs.writeFileSync(bansFile, JSON.stringify(bannedIPs, null, 2));
+    }
+
+    // 3. Force disconnect any currently active WebSockets matching this IP
+    io.sockets.sockets.forEach((socket) => {
+        let socketIp = socket.handshake.address || '';
+        if (socketIp.startsWith('::ffff:')) socketIp = socketIp.substring(7);
+        
+        if (socketIp === ip) {
+            socket.emit('force-disconnect-banned'); 
+            socket.disconnect(true);                
+        }
+    });
+
+    emitLog(`Admin (${userEntry.name}) has banned IP: ${ip}`);
     res.json({ success: true });
 });
 

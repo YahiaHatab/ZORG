@@ -108,7 +108,7 @@ window.zorgSocket.on('init-data', (data) => {
 
 const PINS_KEY = 'zorg_pinned_engines';
 let paletteEngines = [];      // flat array: { id, name, category, isCustom }
-let paletteIndex  = -1;       // keyboard nav cursor
+let paletteIndex  = -1;        // keyboard nav cursor
 let paletteNavigating = false; // true = nav mode (shortcuts active), false = typing mode (shortcuts blocked)
 
 // --- Extract flat engine list from server-rendered HTML ---
@@ -135,7 +135,7 @@ function extractEnginesFromHTML() {
     // Built-in fallback — check each one against the server HTML too
     const builtinDefs = [
         { id: 'marketplace', name: 'Map-Dynamics (Marketplace)', category: 'General', isCustom: false },
-        { id: 'dusseldorf',  name: 'Messe Düsseldorf',           category: 'General', isCustom: false },
+        { id: 'dusseldorf',  name: 'Messe Düsseldorf',            category: 'General', isCustom: false },
         { id: 'algolia',     name: 'NürnbergMesse (Algolia)',     category: 'General', isCustom: false },
         { id: 'informa',     name: 'Informa Markets (cURL)',      category: 'General', isCustom: false },
         { id: 'eshow',       name: 'eShow (Concurrent)',          category: 'General', isCustom: false },
@@ -741,11 +741,6 @@ function closeSuccessModal() {
 async function editEngine(e, id) {
     e.stopPropagation();
     closeCommandPalette();
-    const pwd = await customPrompt("Verify administrative permission to modify existing framework parameters.", "Security Check");
-    if (pwd !== "1532") {
-        if (pwd !== null) showToast("Invalid credentials supplied. Access denied.", "error");
-        return;
-    }
 
     try {
         const res = await fetch('/engine/' + id);
@@ -771,11 +766,6 @@ async function editEngine(e, id) {
 async function deleteEngine(e, id) {
     e.stopPropagation();
     closeCommandPalette();
-    const pwd = await customPrompt("Verify administrative permission to obliterate engine: " + id, "Security Check");
-    if (pwd !== "1532") {
-        if (pwd !== null) showToast("Invalid credentials supplied. Access denied.", "error");
-        return;
-    }
 
     const isConfirmed = await customConfirm("Are you sure you want to delete engine '" + id + "'? This action is permanent and cannot be undone.", "Confirm Deletion");
     if (isConfirmed) {
@@ -2168,3 +2158,45 @@ function toggleProtocolPanel() {
         arrow.style.transform = "rotate(180deg)";
     }
 }
+
+// ==========================================
+// --- BAN SYSTEM (FRONT-END) ---
+// ==========================================
+
+async function openBanManager() {
+    if (!isUserAdmin) {
+        showToast("Unauthorized access.", "error");
+        return;
+    }
+
+    const ipToBan = await customPrompt("Enter the exact IP address to permanently ban from ZORG-Ω:", "Ban Manager");
+    if (!ipToBan) return;
+
+    const isConfirmed = await customConfirm(`Are you absolutely sure you want to ban the IP: ${ipToBan}?`, "Confirm Ban");
+    if (isConfirmed) {
+        try {
+            const res = await fetch('/admin/ban', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip: ipToBan })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            
+            showToast(`IP ${ipToBan} successfully banned.`, "success");
+        } catch (err) {
+            showToast(err.message, "error");
+        }
+    }
+}
+
+// Listen for forceful termination from the server
+window.zorgSocket.on('force-disconnect-banned', () => {
+    window.zorgSocket.disconnect();
+    document.body.innerHTML = `
+        <div style="display:flex; height:100vh; align-items:center; justify-content:center; background:#08090d; color:#f87171; font-family:monospace; text-align:center; flex-direction:column;">
+            <h1 style="font-size: 40px; margin-bottom: 10px; letter-spacing: 0.1em;">403 FORBIDDEN</h1>
+            <p style="color: #7c82a0;">Your connection has been forcefully terminated by an Administrator.</p>
+        </div>
+    `;
+});
