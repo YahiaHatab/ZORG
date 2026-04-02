@@ -385,7 +385,11 @@
 /* Scrape count tooltip */
 .user-tooltip {
     position: absolute;
+<<<<<<< HEAD
     right: 25px;
+=======
+    right: 60px;
+>>>>>>> acb0fda3186184a0d30cc06be799e1aec7909de8
     top: 50%;
     transform: translateY(-50%);
     background: var(--bg-card);
@@ -592,4 +596,8 @@ body.modal-open {
     animation: pulseOrbCritical 0.8s ease-in-out infinite;
 }
 
+<<<<<<< HEAD
 .user-card:hover .ban-btn { opacity: 1 !important; }
+=======
+.user-card:hover .ban-btn { opacity: 1 !important; }
+>>>>>>> acb0fda3186184a0d30cc06be799e1aec7909de8
