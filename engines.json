@@ -131,5 +131,19 @@
     "instruction": "This engine is pre-configured for the Vitafoods exhibitor portal. Just click Run.",
     "inputType": "",
     "category": "Custom"
+  },
+  {
+    "id": "uniti-expo-2026",
+    "name": "UNITI expo 2026 (TYPO3)",
+    "instruction": "Open the exhibitor directory in your browser, open DevTools → Network, copy any request's Cookie header value, and paste the entire string here.",
+    "inputType": "Cookie String",
+    "category": "Custom"
+  },
+  {
+    "id": "pheedloop-general",
+    "name": "PheedLoop (Sponsors/Exhibitors)",
+    "instruction": "Paste the PheedLoop event code from the show URL — it's\nthe all-caps alphanumeric segment in the site URL, e.g.\nsite.pheedloop.com/EVESGTJPGNDWF → paste EVESGTJPGNDWF",
+    "inputType": "Event Code",
+    "category": "General"
   }
 ]
