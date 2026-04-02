@@ -1,6 +1,7 @@
 let searchActive = false;
 let dynamicInstructions = {};
 let dynamicLogic = {};
+let lastLogCount = 0;
 
 // --- AVATAR COLOR SYSTEM ---
 const AVATAR_PALETTE = [
@@ -968,12 +969,19 @@ async function run() {
     telemetryBox.style.display = 'block';
     telemetry.innerHTML = '';
 
+   lastLogCount = 0; // Reset count at start of run
     logInterval = setInterval(async () => {
         try {
             const res = await fetch('/logs');
             const data = await res.json();
-            if (data.logs.length > 0) {
-                telemetry.innerHTML = data.logs.join('<br>');
+            if (data.logs.length > lastLogCount) {
+                // Only take the newest entries
+                const newEntries = data.logs.slice(lastLogCount);
+                const htmlToAppend = newEntries.join('<br>') + '<br>';
+                
+                telemetry.insertAdjacentHTML('beforeend', htmlToAppend);
+                lastLogCount = data.logs.length;
+
                 if (autoScrollTelemetry) {
                     telemetry.scrollTop = telemetry.scrollHeight;
                 }
@@ -1180,52 +1188,26 @@ function renderOnlineUsers() {
         const gradient = getAvatarGradient(u);
         const accent = getAvatarAccent(u);
 
-        // Status
+        // Calculate status states
         let statusText = 'Online';
         let statusClass = 'status-online';
         if (u.status === 'away') { statusText = 'Away'; statusClass = 'status-away'; }
-
         const engEntry = Object.values(activeEnginesMap).find(e => e.socketId === u.id);
         if (engEntry) { statusText = engEntry.engineName || engEntry.mode; statusClass = 'status-busy'; }
 
-        // Currently viewing (only show if not already running an engine)
         let viewingBadge = '';
         if (!engEntry && u.viewing && u.viewing !== 'marketplace') {
             viewingBadge = `<span style="font-family:'Space Mono',monospace;font-size:8px;color:${accent};opacity:0.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;margin-top:1px;">👁 ${u.viewing}</span>`;
         }
 
-        // Scrape count tooltip
         const scrapeCount = u.scrapeCount || 0;
-        const tooltipHtml = `<div class="user-tooltip">🔥 ${scrapeCount} scrape${scrapeCount !== 1 ? 's' : ''} today</div>`;
-
-        // Status dot / toggle button
-        let dotHtml = `<div class="status-dot ${statusClass}"></div>`;
-        if (isMe) {
-            dotHtml = `<button onclick="toggleStatusManual()" style="background:none;border:none;cursor:pointer;display:flex;padding:0;" title="Toggle Away/Online"><div class="status-dot ${statusClass}" style="pointer-events:none;"></div></button>`;
-        }
-
-        // Avatar — clickable color picker if it's me
-        const avatarStyle = `width:34px;height:34px;border-radius:9px;background:${gradient};border:1.5px solid ${accent}30;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:${accent};flex-shrink:0;transition:all 0.2s;`;
-        const avatarHtml = isMe
-            ? `<div class="user-avatar-wrap" onclick="openColorPicker(event)" title="Change your color" style="position:relative;cursor:pointer;">
-                <div style="${avatarStyle}">${initial}</div>
-                <div class="avatar-edit-hint">🎨</div>
-               </div>`
-            : `<div style="${avatarStyle}">${initial}</div>`;
-
-        const cardBorder = isMe ? `border-color:${accent}25;` : '';
-
-        // Unread badge
         const unreadCount = !isMe ? (unreadChatCounts[u.name] || 0) : 0;
-        const unreadBadge = unreadCount > 0
-            ? `<div class="unread-badge" style="position:absolute;top:6px;right:6px;min-width:16px;height:16px;background:var(--purple);border-radius:99px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;font-weight:700;color:#fff;padding:0 4px;pointer-events:none;">${unreadCount > 99 ? '99+' : unreadCount}</div>`
-            : '';
+        const unreadBadge = unreadCount > 0 ? `<div class="unread-badge" style="position:absolute;top:6px;right:6px;min-width:16px;height:16px;background:var(--purple);border-radius:99px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;font-weight:700;color:#fff;padding:0 4px;pointer-events:none;">${unreadCount > 99 ? '99+' : unreadCount}</div>` : '';
 
-        const cardId = `user-card-${u.id}`;
-        currentIds.add(cardId);
-
+        // The "New Inner Content" string
         const newInnerHtml = `
-            ${avatarHtml}
+            ${isMe ? `<div class="user-avatar-wrap" onclick="openColorPicker(event)" title="Change your color" style="position:relative;cursor:pointer;"><div style="width:34px;height:34px;border-radius:9px;background:${gradient};border:1.5px solid ${accent}30;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:${accent};flex-shrink:0;transition:all 0.2s;">${initial}</div><div class="avatar-edit-hint">🎨</div></div>` 
+                   : `<div style="width:34px;height:34px;border-radius:9px;background:${gradient};border:1.5px solid ${accent}30;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:${accent};flex-shrink:0;">${initial}</div>`}
             <div style="flex:1;overflow:hidden;pointer-events:none;min-width:0;">
                 <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${isMe ? accent : '#e8eaf0'};">
                     ${u.name}${isMe ? ' <span style="font-family:\'Space Mono\',monospace;font-size:8px;color:#3d4260;">(You)</span>' : ''}
@@ -1233,43 +1215,36 @@ function renderOnlineUsers() {
                 <div style="font-family:'Space Mono',monospace;font-size:9px;color:#7c82a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;">${statusText}</div>
                 ${viewingBadge}
             </div>
-            ${dotHtml}
-            ${tooltipHtml}
+            ${isMe ? `<button onclick="toggleStatusManual()" style="background:none;border:none;cursor:pointer;display:flex;padding:0;" title="Toggle Status"><div class="status-dot ${statusClass}" style="pointer-events:none;"></div></button>` : `<div class="status-dot ${statusClass}"></div>`}
+            <div class="user-tooltip">🔥 ${scrapeCount} scrape${scrapeCount !== 1 ? 's' : ''} today</div>
             ${unreadBadge}
         `;
 
+        const cardId = `user-card-${u.id}`;
+        currentIds.add(cardId);
+
         let cardEl = document.getElementById(cardId);
         if (!cardEl) {
+            // Create new card only if it doesn't exist
             cardEl = document.createElement('div');
             cardEl.id = cardId;
             cardEl.className = `user-card ${isMe ? 'is-me' : ''}`;
-            if (!isMe) {
-                const safeName = (u.name || "?").replace(/'/g, "\\'");
-                cardEl.onclick = () => setChatTarget(u.name);
-            }
-            cardEl.style.cssText = `${cardBorder}position:relative;`;
+            if (!isMe) cardEl.onclick = () => setChatTarget(u.name);
+            cardEl.style.cssText = `position:relative;${isMe ? `border-color:${accent}25;` : ''}`;
             cardEl.innerHTML = newInnerHtml;
             listEl.appendChild(cardEl);
         } else {
-            // Update the card if something changed
-            const targetStyle = `${cardBorder}position:relative;`;
-            if (cardEl.style.cssText !== targetStyle) cardEl.style.cssText = targetStyle;
-
-            // Only update innerHTML if it's actually different to avoid layout trash
-            // We use a simple hash/string compare
-            if (cardEl.innerHTML.trim() !== newInnerHtml.trim()) {
+            // If it exists, only update innerHTML if it has actually changed
+            if (cardEl.innerHTML !== newInnerHtml) {
                 cardEl.innerHTML = newInnerHtml;
             }
-            // Always ensure it's in the correct position for sorting
-            listEl.appendChild(cardEl);
+            listEl.appendChild(cardEl); // Maintain order
         }
     });
 
-    // Remove users who are now offline
+    // Remove users who left
     Array.from(listEl.children).forEach(child => {
-        if (child.id && child.id.startsWith('user-card-') && !currentIds.has(child.id)) {
-            child.remove();
-        }
+        if (child.id && child.id.startsWith('user-card-') && !currentIds.has(child.id)) child.remove();
     });
 }
 
