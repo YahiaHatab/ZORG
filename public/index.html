@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="height:100%;overflow-x:hidden;">
 
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ZORG-Ω | Architect</title>
     <link rel="icon" type="image/x-icon" href="/Icons/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -946,7 +947,7 @@
     </nav>
 
     <div id="mainGrid" class="z-content"
-        style="padding-top:56px;display:grid;grid-template-columns:280px 1fr 280px;gap:0;min-height:100vh;">
+        style="padding-top:56px;display:grid;grid-template-columns:minmax(0,var(--col-left,280px)) 5px minmax(0,1fr) 5px minmax(0,var(--col-right,280px));gap:0;min-height:100vh;">
 
         <aside id="noticeBoard"
             style="border-right:1px solid var(--border);padding:20px 16px;display:flex;flex-direction:column;gap:16px;height:calc(100vh - 56px);position:sticky;top:56px;overflow-y:auto;"
@@ -1025,9 +1026,11 @@
             </div>
         </aside>
 
-        <main style="padding:32px 40px;display:flex;flex-direction:column;align-items:center;">
+        <div id="resizeHandleLeft" class="resize-handle resize-handle--v" title="Drag to resize"></div>
 
-            <div id="homePage" style="width:100%;max-width:560px;">
+        <main style="padding:2rem 2.5rem;display:flex;flex-direction:column;align-items:stretch;width:100%;box-sizing:border-box;">
+
+            <div id="homePage" style="width:100%;max-width:100%;box-sizing:border-box;">
 
                 <div style="margin-bottom:36px;" class="home-in">
                     <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:6px;">
@@ -1072,7 +1075,7 @@
 
             </div>
 
-            <div id="scraperView" class="view-hidden" style="width:100%;max-width:540px;">
+            <div id="scraperView" class="view-hidden" style="width:100%;max-width:100%;box-sizing:border-box;">
 
                 <button onclick="goToHome()" class="back-btn">
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -1089,7 +1092,7 @@
                     <p style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:0.15em;">STANDARDIZER ACTIVE — DEDUPLICATION ENGINE ONLINE</p>
                 </div>
 
-            <div class="card" style="width:100%;max-width:540px;padding:28px;">
+            <div class="card" style="width:100%;max-width:100%;padding:1.75rem;box-sizing:border-box;">
 
                 <div
                     style="background:var(--bg-surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:20px;">
@@ -1225,6 +1228,7 @@
                             </button>
                         </div>
                     </div>
+                    <div id="telemetryResizeHandle" class="resize-handle resize-handle--h" title="Drag to resize telemetry"></div>
                     <div id="telemetry"></div>
                 </div>
 
@@ -1247,6 +1251,8 @@
                 </div>
             </div>
             </div></main>
+
+        <div id="resizeHandleRight" class="resize-handle resize-handle--v" title="Drag to resize"></div>
 
         <aside
             style="border-left:1px solid var(--border);padding:20px 16px;display:flex;flex-direction:column;gap:16px;height:calc(100vh - 56px);position:sticky;top:56px;overflow-y:auto;"
@@ -1419,6 +1425,132 @@
     </style>
 
     <script src="client.js?v=6"></script>
+<script>
+/* ============================================================
+   ZORG Liquid Resize Engine
+   Three drag zones:
+     1. Left sidebar  (#resizeHandleLeft)  — adjusts --col-left
+     2. Right sidebar (#resizeHandleRight) — adjusts --col-right
+     3. Telemetry     (#telemetryResizeHandle) — adjusts #telemetry height
+   All sizes persisted in localStorage.
+============================================================ */
+(function () {
+    const ROOT   = document.documentElement;
+    const GRID   = document.getElementById('mainGrid');
+    const TELEM  = document.getElementById('telemetry');
+    const MIN_SIDE  = 160;  // px — minimum sidebar width
+    const MAX_SIDE  = 520;  // px — maximum sidebar width
+    const MIN_TELEM = 80;   // px — minimum telemetry height
+    const MAX_TELEM = 600;  // px — maximum telemetry height
+
+    /* ---------- Restore saved sizes ---------- */
+    function restoreSizes() {
+        const savedLeft  = localStorage.getItem('zorg_col_left');
+        const savedRight = localStorage.getItem('zorg_col_right');
+        const savedTelem = localStorage.getItem('zorg_telem_h');
+        if (savedLeft)  ROOT.style.setProperty('--col-left',  savedLeft  + 'px');
+        if (savedRight) ROOT.style.setProperty('--col-right', savedRight + 'px');
+        if (savedTelem && TELEM) TELEM.style.height = savedTelem + 'px';
+    }
+    restoreSizes();
+
+    /* ---------- Generic drag helper ---------- */
+    function startDrag(e, onMove, onEnd) {
+        e.preventDefault();
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        function handleMove(ev) { onMove(ev); }
+        function handleUp(ev) {
+            document.removeEventListener('mousemove', handleMove);
+            document.removeEventListener('mouseup', handleUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            if (onEnd) onEnd(ev);
+        }
+        document.addEventListener('mousemove', handleMove);
+        document.addEventListener('mouseup', handleUp);
+    }
+
+    /* ---------- Left sidebar resize ---------- */
+    const lHandle = document.getElementById('resizeHandleLeft');
+    if (lHandle) {
+        lHandle.addEventListener('mousedown', function (e) {
+            const startX = e.clientX;
+            const startW = parseFloat(
+                getComputedStyle(ROOT).getPropertyValue('--col-left') || '280'
+            );
+            startDrag(e,
+                function (ev) {
+                    const newW = Math.min(MAX_SIDE, Math.max(MIN_SIDE, startW + (ev.clientX - startX)));
+                    ROOT.style.setProperty('--col-left', newW + 'px');
+                },
+                function () {
+                    const w = parseFloat(getComputedStyle(ROOT).getPropertyValue('--col-left'));
+                    localStorage.setItem('zorg_col_left', Math.round(w));
+                }
+            );
+        });
+    }
+
+    /* ---------- Right sidebar resize ---------- */
+    const rHandle = document.getElementById('resizeHandleRight');
+    if (rHandle) {
+        rHandle.addEventListener('mousedown', function (e) {
+            const startX = e.clientX;
+            const startW = parseFloat(
+                getComputedStyle(ROOT).getPropertyValue('--col-right') || '280'
+            );
+            startDrag(e,
+                function (ev) {
+                    const newW = Math.min(MAX_SIDE, Math.max(MIN_SIDE, startW - (ev.clientX - startX)));
+                    ROOT.style.setProperty('--col-right', newW + 'px');
+                },
+                function () {
+                    const w = parseFloat(getComputedStyle(ROOT).getPropertyValue('--col-right'));
+                    localStorage.setItem('zorg_col_right', Math.round(w));
+                }
+            );
+            document.body.style.cursor = 'col-resize';
+        });
+    }
+
+    /* ---------- Telemetry height resize ---------- */
+    const tHandle = document.getElementById('telemetryResizeHandle');
+    if (tHandle && TELEM) {
+        tHandle.addEventListener('mousedown', function (e) {
+            const startY = e.clientY;
+            const startH = TELEM.offsetHeight;
+            startDrag(e,
+                function (ev) {
+                    const newH = Math.min(MAX_TELEM, Math.max(MIN_TELEM, startH + (ev.clientY - startY)));
+                    TELEM.style.height = newH + 'px';
+                    TELEM.style.minHeight = '0';
+                },
+                function () {
+                    localStorage.setItem('zorg_telem_h', Math.round(TELEM.offsetHeight));
+                }
+            );
+            document.body.style.cursor = 'row-resize';
+        });
+    }
+
+    /* ---------- Double-click to reset to defaults ---------- */
+    if (lHandle) lHandle.addEventListener('dblclick', function () {
+        ROOT.style.setProperty('--col-left', '280px');
+        localStorage.removeItem('zorg_col_left');
+    });
+    if (rHandle) rHandle.addEventListener('dblclick', function () {
+        ROOT.style.setProperty('--col-right', '280px');
+        localStorage.removeItem('zorg_col_right');
+    });
+    if (tHandle && TELEM) tHandle.addEventListener('dblclick', function () {
+        TELEM.style.height = '200px';
+        localStorage.removeItem('zorg_telem_h');
+    });
+})();
+</script>
+
 </body>
 
 </html>

@@ -750,3 +750,279 @@ aside#noticeBoard {
     }
 }
 
+
+
+/* ============================================
+   LIQUID LAYOUT — Fluid & Fully Resizable
+   ============================================ */
+
+/* 1. "Fill the Frame" — Ghost margin elimination */
+html,
+body {
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    height: 100%;
+    width: 100%;
+}
+
+/* 2. Fluid container: main content area */
+main {
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* 3. Fluid scraper & home views */
+#scraperView,
+#homePage {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Card inside scraper view: full width */
+#scraperView > .card,
+#scraperView > div > .card {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* 4. All inputs: 100% width, box-sizing */
+.inp {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* Input fields in engine input boxes */
+#standardBox .inp,
+#curlBox .inp,
+#eshowBox .inp,
+#cadBox .inp,
+#marketBox .inp,
+#customInputBox .inp {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* 5. Buttons: full width */
+.btn-primary {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 6. Telemetry log: fluid, min-height, can grow */
+#telemetry {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    min-height: 200px;
+    height: auto !important;
+    flex-grow: 1;
+}
+
+#telemetryBox {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 7. Main grid: full width */
+#mainGrid {
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+}
+
+/* 8. Stats grid: responsive */
+#homeStatsGrid {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 9. Engine selector / palette: full width */
+#paletteBtn {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ============================================
+   RESIZE HANDLES
+   ============================================ */
+
+/* Base handle */
+.resize-handle {
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+
+/* Vertical (column) handles — sit between grid columns */
+.resize-handle--v {
+    width: 5px;
+    cursor: col-resize;
+    background: transparent;
+    /* Pull handles out of normal flow — they live IN the grid */
+    align-self: stretch;
+}
+
+.resize-handle--v::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 2px;
+    height: 40px;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.06);
+    transition: background 0.2s, height 0.2s;
+}
+
+.resize-handle--v:hover::before,
+.resize-handle--v:active::before {
+    background: rgba(99, 130, 255, 0.55);
+    height: 64px;
+    box-shadow: 0 0 8px rgba(99, 130, 255, 0.3);
+}
+
+/* Horizontal (row) handle — sits above telemetry */
+.resize-handle--h {
+    width: 100%;
+    height: 8px;
+    cursor: row-resize;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+}
+
+.resize-handle--h::before {
+    content: '';
+    width: 40px;
+    height: 2px;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.07);
+    transition: background 0.2s, width 0.2s;
+}
+
+.resize-handle--h:hover::before,
+.resize-handle--h:active::before {
+    background: rgba(62, 207, 142, 0.55);
+    width: 64px;
+    box-shadow: 0 0 8px rgba(62, 207, 142, 0.25);
+}
+
+/* Expand hit-area without affecting layout */
+.resize-handle--v::after {
+    content: '';
+    position: absolute;
+    inset: 0 -6px;
+}
+
+.resize-handle--h::after {
+    content: '';
+    position: absolute;
+    inset: -6px 0;
+}
+
+/* ============================================
+   RESIZE ENGINE — CSS custom property defaults
+   ============================================ */
+:root {
+    --col-left: 280px;
+    --col-right: 280px;
+}
+
+/* Prevent text selection flicker during drag */
+.is-resizing,
+.is-resizing * {
+    user-select: none !important;
+    cursor: col-resize !important;
+}
+
+.is-resizing-row,
+.is-resizing-row * {
+    user-select: none !important;
+    cursor: row-resize !important;
+}
+
+/* Hide sidebar handles on small screens */
+@media (max-width: 600px) {
+    #resizeHandleLeft,
+    #resizeHandleRight {
+        display: none !important;
+    }
+}
+
+/* ============================================
+   PROGRESSIVE COLLAPSE — Fluid Breakpoints
+   Fix: sidebars crushing main content when
+   window is smaller than sidebar widths sum.
+   ============================================ */
+
+/* -- Breakpoint 1: ~1080px — Drop RIGHT sidebar -- */
+@media (max-width: 1080px) {
+    #mainGrid {
+        grid-template-columns: var(--col-left, 280px) 5px 1fr !important;
+    }
+    #mainGrid > aside:not(#noticeBoard),
+    #resizeHandleRight {
+        display: none !important;
+    }
+    #mainGrid > aside:not(#noticeBoard) + * {
+        display: none !important;
+    }
+}
+
+/* -- Breakpoint 2: ~760px — Drop BOTH sidebars -- */
+@media (max-width: 760px) {
+    #mainGrid {
+        grid-template-columns: 1fr !important;
+    }
+    #mainGrid > aside,
+    #resizeHandleLeft,
+    #resizeHandleRight {
+        display: none !important;
+    }
+    main {
+        padding: 1.25rem 1rem !important;
+    }
+}
+
+/* -- Breakpoint 3: ~520px — Compact mobile -- */
+@media (max-width: 520px) {
+    main {
+        padding: 1rem 0.75rem !important;
+    }
+    #mainGrid {
+        grid-template-columns: 1fr !important;
+    }
+    .card {
+        border-radius: 10px !important;
+    }
+    .btn-primary {
+        font-size: 13px !important;
+        padding: 14px 16px !important;
+    }
+    /* Scraper card: tighter internal padding */
+    #scraperView > div > .card,
+    #scraperView > .card {
+        padding: 1.1rem !important;
+    }
+    /* Input row with palette + plus button: stack them */
+    #scraperView div[style*="display:flex"][style*="gap:8px"] {
+        flex-wrap: wrap !important;
+    }
+    /* Stop icon buttons shrinking to zero */
+    #stopBtn, #clearInputsBtn {
+        flex-shrink: 0 !important;
+    }
+}
