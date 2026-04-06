@@ -112,13 +112,6 @@
     "category": "General"
   },
   {
-    "id": "marketplace",
-    "name": "Map-Dynamics (Marketplace)",
-    "instruction": "",
-    "inputType": "",
-    "category": "General"
-  },
-  {
     "id": "engine_fespa2026",
     "name": "FESPA 2026 (ExpoPlatform)",
     "instruction": "Just hit Run. No inputs needed.",
@@ -144,6 +137,20 @@
     "name": "PheedLoop (Sponsors/Exhibitors)",
     "instruction": "Paste the PheedLoop event code from the show URL — it's\nthe all-caps alphanumeric segment in the site URL, e.g.\nsite.pheedloop.com/EVESGTJPGNDWF → paste EVESGTJPGNDWF",
     "inputType": "Event Code",
+    "category": "General"
+  },
+  {
+    "id": "expofp-general",
+    "name": "ExpoFP (General)",
+    "instruction": "Paste the subdomain prefix from the show's ExpoFP URL\n                 e.g. for \"automanet.expofp.com\" → enter \"automanet\"",
+    "inputType": "Show Slug",
+    "category": "General"
+  },
+  {
+    "id": "map-dynamics-general",
+    "name": "Map-Dynamics (Marketplace)",
+    "instruction": "Paste the Show_ID value from the marketplace URL into Field 1;\npaste your session cookie string into Field 2 if the show requires auth.",
+    "inputType": "Show ID, Session Cookie (optional)",
     "category": "General"
   }
 ]

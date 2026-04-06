@@ -945,10 +945,10 @@
         </button>
     </nav>
 
-    <div class="z-content"
+    <div id="mainGrid" class="z-content"
         style="padding-top:56px;display:grid;grid-template-columns:280px 1fr 280px;gap:0;min-height:100vh;">
 
-        <aside
+        <aside id="noticeBoard"
             style="border-right:1px solid var(--border);padding:20px 16px;display:flex;flex-direction:column;gap:16px;height:calc(100vh - 56px);position:sticky;top:56px;overflow-y:auto;"
             class="scroll">
 
@@ -962,14 +962,17 @@
                         </svg>
                         Notice Board
                     </div>
-                    <button id="bulletinAddBtn" onclick="toggleBulletinInput()"
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <button id="noticeBoardToggle" onclick="toggleNoticeBoard()" title="Toggle Notice Board">📌</button>
+                        <button id="bulletinAddBtn" onclick="toggleBulletinInput()"
                         style="display:none;width:22px;height:22px;background:var(--amber-soft);border:1px solid rgba(245,166,35,0.3);border-radius:6px;align-items:center;justify-content:center;cursor:pointer;color:var(--amber);"
                         title="Pin Note">
                         <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="none" viewBox="0 0 24 24"
                             stroke="currentColor" stroke-width="2.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
                         </svg>
-                    </button>
+                        </button>
+                    </div>
                 </div>
 
                 <div id="bulletinInputContainer" style="display:none;margin-bottom:12px;flex-direction:column;gap:8px;">

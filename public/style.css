@@ -385,11 +385,8 @@
 /* Scrape count tooltip */
 .user-tooltip {
     position: absolute;
-<<<<<<< HEAD
     right: 25px;
-=======
     right: 60px;
->>>>>>> acb0fda3186184a0d30cc06be799e1aec7909de8
     top: 50%;
     transform: translateY(-50%);
     background: var(--bg-card);
@@ -596,8 +593,160 @@ body.modal-open {
     animation: pulseOrbCritical 0.8s ease-in-out infinite;
 }
 
-<<<<<<< HEAD
 .user-card:hover .ban-btn { opacity: 1 !important; }
-=======
-.user-card:hover .ban-btn { opacity: 1 !important; }
->>>>>>> acb0fda3186184a0d30cc06be799e1aec7909de8
+
+/* ============================================
+   PORTAL-READY — Nexus 500px Window Mode
+   @media (max-width: 600px)
+   ============================================ */
+
+/* --- Notice Board collapsible toggle button --- */
+#noticeBoardToggle {
+    display: none; /* hidden on desktop */
+    width: 26px;
+    height: 26px;
+    background: rgba(245, 166, 35, 0.12);
+    border: 1px solid rgba(245, 166, 35, 0.25);
+    border-radius: 7px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #f5a623;
+    font-size: 14px;
+    flex-shrink: 0;
+    transition: background 0.15s, transform 0.15s;
+    line-height: 1;
+}
+#noticeBoardToggle:hover {
+    background: rgba(245, 166, 35, 0.22);
+}
+
+/* Collapsed state for left aside (Notice Board) */
+aside#noticeBoard.collapsed {
+    max-height: 48px !important;
+    overflow: hidden !important;
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+}
+
+aside#noticeBoard.collapsed > *:not(:first-child) {
+    display: none !important;
+}
+
+aside#noticeBoard {
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.3s ease;
+}
+
+@media (max-width: 600px) {
+
+    /* --- Show the toggle pin button --- */
+    #noticeBoardToggle {
+        display: flex;
+    }
+
+    /* --- Reflow: single column layout --- */
+    .z-content > div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: auto 1fr !important;
+    }
+
+    /* --- Hide left sidebar (Notice Board) by default --- */
+    aside#noticeBoard {
+        display: none !important;
+    }
+
+    /* --- Hide right sidebar (Online Now / Engine Activity) --- */
+    aside:not(#noticeBoard) {
+        display: none !important;
+    }
+
+    /* --- Topbar: compact --- */
+    .topbar {
+        padding: 0 12px;
+        gap: 10px;
+    }
+
+    /* --- Hide large ARCHITECT heading text --- */
+    h1[style*="font-size:56px"],
+    h1[style*="font-size:52px"] {
+        display: none !important;
+    }
+
+    /* --- Hide the version badge next to heading --- */
+    h1[style*="font-size:56px"] + .badge,
+    h1[style*="font-size:52px"] + .badge {
+        display: none !important;
+    }
+
+    /* --- Hide the mono subtitle line under heading --- */
+    p[style*="STANDARDIZER"] {
+        display: none !important;
+    }
+
+    /* --- Main content area: full width, tighter padding --- */
+    main {
+        padding: 16px 14px !important;
+        width: 100% !important;
+        align-items: stretch !important;
+    }
+
+    /* --- Scraper view / home page: fill full width --- */
+    #homePage,
+    #scraperView {
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+
+    /* --- Card inside scraper view: full width --- */
+    #scraperView > .card,
+    #scraperView > div > .card {
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+
+    /* --- Telemetry log: full width & readable height --- */
+    #telemetry {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        height: 120px !important;
+    }
+
+    #telemetryBox {
+        width: 100% !important;
+    }
+
+    /* --- Toast: full width in portal --- */
+    #toastContainer {
+        right: 8px !important;
+        bottom: 8px !important;
+    }
+
+    /* --- Stats grid: 2 columns on small --- */
+    #homeStatsGrid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    /* --- Stat value: smaller font --- */
+    .stat-value {
+        font-size: 28px !important;
+    }
+
+    /* --- Hide the "SYSTEM UPDATES" footer in left sidebar
+         (already hidden via aside#noticeBoard hidden, but guard) --- */
+    #updatesList {
+        display: none !important;
+    }
+
+    /* --- Admin bar: hide wide inputs, keep icon --- */
+    #adminUpdateInputs {
+        display: none !important;
+    }
+
+    /* --- Notification panel fix --- */
+    #notificationPanel {
+        right: -50px !important;
+        width: 260px !important;
+    }
+}
+

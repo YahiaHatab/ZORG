@@ -519,6 +519,87 @@ function toggleSearch() { openCommandPalette(); }
 function filterEngines() {}
 function toggleCategory() {}
 
+// ============================================================
+// PORTAL-READY: Notice Board toggle (collapsible / overlay)
+// ============================================================
+function toggleNoticeBoard() {
+    const board   = document.getElementById('noticeBoard');
+    const btn     = document.getElementById('noticeBoardToggle');
+    const isPortal = window.innerWidth <= 600;
+
+    if (!board) return;
+
+    if (isPortal) {
+        // In portal mode: toggle as floating slide-in overlay
+        const isVisible = board.style.display === 'flex';
+        if (isVisible) {
+            // Slide out & hide
+            board.style.transform = 'translateX(-110%)';
+            board.style.opacity   = '0';
+            setTimeout(() => { board.style.display = 'none'; }, 260);
+            if (btn) btn.style.background = 'rgba(245,166,35,0.12)';
+        } else {
+            // Position as overlay, then slide in
+            board.style.cssText = `
+                display: flex !important;
+                position: fixed !important;
+                top: 56px !important;
+                left: 0 !important;
+                z-index: 150 !important;
+                width: 280px !important;
+                height: calc(100vh - 56px) !important;
+                background: var(--bg-surface) !important;
+                border-right: 1px solid rgba(245,166,35,0.25) !important;
+                box-shadow: 8px 0 32px rgba(0,0,0,0.5) !important;
+                flex-direction: column !important;
+                gap: 16px !important;
+                padding: 20px 16px !important;
+                overflow-y: auto !important;
+                transform: translateX(-110%);
+                opacity: 0;
+                transition: transform 0.26s cubic-bezier(0.34,1.1,0.64,1), opacity 0.22s ease;
+            `;
+            // Trigger animation on next frame
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    board.style.transform = 'translateX(0)';
+                    board.style.opacity   = '1';
+                });
+            });
+            if (btn) btn.style.background = 'rgba(245,166,35,0.28)';
+        }
+        sessionStorage.setItem('zorg_notice_open', isVisible ? '0' : '1');
+    } else {
+        // Desktop mode: collapse/expand in-place (shrink to header)
+        board.classList.toggle('collapsed');
+        const isCollapsed = board.classList.contains('collapsed');
+        if (btn) btn.title = isCollapsed ? 'Expand Notice Board' : 'Collapse Notice Board';
+        if (btn) btn.style.opacity = isCollapsed ? '0.5' : '1';
+        sessionStorage.setItem('zorg_notice_open', isCollapsed ? '0' : '1');
+    }
+}
+
+// Close portal overlay when clicking outside the board
+document.addEventListener('click', function(e) {
+    const board = document.getElementById('noticeBoard');
+    const btn   = document.getElementById('noticeBoardToggle');
+    if (
+        window.innerWidth <= 600 &&
+        board &&
+        board.style.display === 'flex' &&
+        board.style.position === 'fixed' &&
+        !board.contains(e.target) &&
+        e.target !== btn
+    ) {
+        board.style.transform = 'translateX(-110%)';
+        board.style.opacity   = '0';
+        setTimeout(() => { board.style.display = 'none'; }, 260);
+        if (btn) btn.style.background = 'rgba(245,166,35,0.12)';
+        sessionStorage.setItem('zorg_notice_open', '0');
+    }
+});
+
+
 // --- Init on init-data (after server populates engineListContainer) ---
 // Refresh palette engines list and re-render pins bar
 const _origInitDataForMenu = (data) => {
