@@ -288,11 +288,11 @@ app.post('/run', async (req, res) => {
 
     if (ip && ip.startsWith('::ffff:')) ip = ip.substring(7);
 
-    let currentUser = Object.values(activeUsers).find(u => u.ip === ip);
+    let currentUser = Object.values(onlineUsers).find(u => u.ip === ip);
 
     let username = currentUser ? currentUser.name : (savedUsers[ip] ? savedUsers[ip].name : "Unknown");
 
-    let socketId = currentUser ? currentUser.id : "unknown-socket";
+    let socketId = currentUser && currentUser.socketIds ? currentUser.socketIds[0] : "unknown-socket";
 
 
 
@@ -1163,7 +1163,9 @@ function getChatKey(name1, name2) {
 
 
 
-const activeUsers = {};
+const onlineUsers = {};
+
+const activeUsers = {}; // Key: socket.id, Value: username string
 
 const activeEngines = {};
 
@@ -1403,7 +1405,9 @@ io.on('connection', (socket) => {
 
     socket.on('add-bulletin', (data) => {
 
-        const sender = activeUsers[socket.id];
+        const username = activeUsers[socket.id];
+
+        const sender = onlineUsers[username];
 
         if (!sender || !data) return;
 
@@ -1465,7 +1469,9 @@ io.on('connection', (socket) => {
 
         // Allow the author or an admin to delete a pin
 
-        const sender = activeUsers[socket.id];
+        const username = activeUsers[socket.id];
+
+        const sender = onlineUsers[username];
 
         const userEntry = savedUsers[ip];
 
@@ -1527,11 +1533,19 @@ io.on('connection', (socket) => {
 
     if (uName) {
 
-        const savedColor = (savedUsers[ip] && typeof savedUsers[ip] === 'object') ? savedUsers[ip].avatarColor || null : null;
+        if (!onlineUsers[uName]) {
 
-        activeUsers[socket.id] = { id: socket.id, name: uName, ip: ip, status: 'online', avatarColor: savedColor, scrapeCount: 0, viewing: null };
+            const savedColor = (savedUsers[ip] && typeof savedUsers[ip] === 'object') ? savedUsers[ip].avatarColor || null : null;
 
-        io.emit('online-users', Object.values(activeUsers));
+            onlineUsers[uName] = { id: socket.id, name: uName, ip: ip, status: 'online', avatarColor: savedColor, scrapeCount: 0, viewing: null, socketIds: [] };
+
+        }
+
+        if (!onlineUsers[uName].socketIds.includes(socket.id)) onlineUsers[uName].socketIds.push(socket.id);
+
+        activeUsers[socket.id] = uName;
+
+        io.emit('online-users', Object.values(onlineUsers));
 
     } else {
 
@@ -1553,9 +1567,17 @@ io.on('connection', (socket) => {
 
 
 
-        activeUsers[socket.id] = { id: socket.id, name: cleanName, ip: ip, status: 'online', avatarColor: null, scrapeCount: 0, viewing: null };
+        if (!onlineUsers[cleanName]) {
 
-        io.emit('online-users', Object.values(activeUsers));
+            onlineUsers[cleanName] = { id: socket.id, name: cleanName, ip: ip, status: 'online', avatarColor: null, scrapeCount: 0, viewing: null, socketIds: [] };
+
+        }
+
+        if (!onlineUsers[cleanName].socketIds.includes(socket.id)) onlineUsers[cleanName].socketIds.push(socket.id);
+
+        activeUsers[socket.id] = cleanName;
+
+        io.emit('online-users', Object.values(onlineUsers));
 
 
 
@@ -1575,7 +1597,7 @@ io.on('connection', (socket) => {
 
             userName: cleanName,
 
-            bulletinPosts: bulletinPosts // <-- ADD THIS LINE
+            bulletinPosts: bulletinPosts
 
         });
 
@@ -1613,11 +1635,21 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
 
-        if (activeUsers[socket.id]) {
+        const username = activeUsers[socket.id];
+
+        if (username && onlineUsers[username]) {
+
+            onlineUsers[username].socketIds = onlineUsers[username].socketIds.filter(id => id !== socket.id);
+
+            if (onlineUsers[username].socketIds.length === 0) {
+
+                delete onlineUsers[username];
+
+            }
 
             delete activeUsers[socket.id];
 
-            io.emit('online-users', Object.values(activeUsers));
+            io.emit('online-users', Object.values(onlineUsers));
 
         }
 
@@ -1627,11 +1659,13 @@ io.on('connection', (socket) => {
 
     socket.on('update-presence', (status) => {
 
-        if (activeUsers[socket.id]) {
+        const username = activeUsers[socket.id];
 
-            activeUsers[socket.id].status = status;
+        if (username && onlineUsers[username]) {
 
-            io.emit('online-users', Object.values(activeUsers));
+            onlineUsers[username].status = status;
+
+            io.emit('online-users', Object.values(onlineUsers));
 
         }
 
@@ -1641,11 +1675,11 @@ io.on('connection', (socket) => {
 
     socket.on('update-avatar-color', (color) => {
 
-        if (activeUsers[socket.id] && /^#[0-9a-fA-F]{6}$/.test(color)) {
+        const username = activeUsers[socket.id];
 
-            activeUsers[socket.id].avatarColor = color;
+        if (username && onlineUsers[username] && /^#[0-9a-fA-F]{6}$/.test(color)) {
 
-            // Persist color to user record
+            onlineUsers[username].avatarColor = color;
 
             if (savedUsers[ip] && typeof savedUsers[ip] === 'object') {
 
@@ -1655,7 +1689,7 @@ io.on('connection', (socket) => {
 
             }
 
-            io.emit('online-users', Object.values(activeUsers));
+            io.emit('online-users', Object.values(onlineUsers));
 
         }
 
@@ -1665,11 +1699,13 @@ io.on('connection', (socket) => {
 
     socket.on('update-scrape-count', (count) => {
 
-        if (activeUsers[socket.id]) {
+       const username = activeUsers[socket.id];
 
-            activeUsers[socket.id].scrapeCount = parseInt(count) || 0;
+        if (username && onlineUsers[username]) {
 
-            io.emit('online-users', Object.values(activeUsers));
+            onlineUsers[username].scrapeCount = parseInt(count) || 0;
+
+            io.emit('online-users', Object.values(onlineUsers));
 
         }
 
@@ -1679,11 +1715,13 @@ io.on('connection', (socket) => {
 
     socket.on('update-viewing', (engineName) => {
 
-        if (activeUsers[socket.id]) {
+        const username = activeUsers[socket.id];
 
-            activeUsers[socket.id].viewing = engineName || null;
+        if (username && onlineUsers[username]) {
 
-            io.emit('online-users', Object.values(activeUsers));
+            onlineUsers[username].viewing = engineName || null;
+
+            io.emit('online-users', Object.values(onlineUsers));
 
         }
 
@@ -1693,15 +1731,21 @@ io.on('connection', (socket) => {
 
     socket.on('typing-start', ({ targetName }) => {
 
-        const sender = activeUsers[socket.id];
+        const username = activeUsers[socket.id];
+
+        const sender = onlineUsers[username];
 
         if (!sender) return;
 
-        const targetUser = Object.values(activeUsers).find(u => u.name === targetName);
+        const targetUser = onlineUsers[targetName];
 
-        if (targetUser) {
+        if (targetUser && targetUser.socketIds) {
 
-            io.to(targetUser.id).emit('user-typing', { from: sender.name });
+            targetUser.socketIds.forEach(sid => {
+
+                io.to(sid).emit('user-typing', { from: sender.name });
+
+            });
 
         }
 
@@ -1711,15 +1755,21 @@ io.on('connection', (socket) => {
 
     socket.on('typing-stop', ({ targetName }) => {
 
-        const sender = activeUsers[socket.id];
+        const username = activeUsers[socket.id];
+
+        const sender = onlineUsers[username];
 
         if (!sender) return;
 
-        const targetUser = Object.values(activeUsers).find(u => u.name === targetName);
+        const targetUser = onlineUsers[targetName];
 
-        if (targetUser) {
+        if (targetUser && targetUser.socketIds) {
 
-            io.to(targetUser.id).emit('user-stopped-typing', { from: sender.name });
+            targetUser.socketIds.forEach(sid => {
+
+                io.to(sid).emit('user-stopped-typing', { from: sender.name });
+
+            });
 
         }
 
@@ -1731,7 +1781,9 @@ io.on('connection', (socket) => {
 
     socket.on('request-chat-history', (targetName) => {
 
-        const sender = activeUsers[socket.id];
+        const username = activeUsers[socket.id];
+
+        const sender = onlineUsers[username];
 
         if (!sender || !targetName) return;
 
@@ -1745,7 +1797,9 @@ io.on('connection', (socket) => {
 
     socket.on('send-private-msg', ({ targetName, message }) => {
 
-        const sender = activeUsers[socket.id];
+        const username = activeUsers[socket.id];
+
+        const sender = onlineUsers[username];
 
         if (!sender || !targetName) return;
 
@@ -1771,19 +1825,27 @@ io.on('connection', (socket) => {
 
 
 
-        // 1. Send it back to the sender so their screen updates instantly
+        // 1. Send it back to all sockets of the sender
 
-        socket.emit('receive-private-msg', msgObj);
+        sender.socketIds.forEach(sid => {
+
+            io.to(sid).emit('receive-private-msg', msgObj);
+
+        });
 
 
 
-        // 2. Find the target user's current live socket ID and send it to them
+        // 2. Find the target user and send it to all their sockets
 
-        const targetUser = Object.values(activeUsers).find(u => u.name === targetName);
+        const targetUser = onlineUsers[targetName];
 
-        if (targetUser) {
+        if (targetUser && targetUser.socketIds) {
 
-            io.to(targetUser.id).emit('receive-private-msg', msgObj);
+            targetUser.socketIds.forEach(sid => {
+
+                io.to(sid).emit('receive-private-msg', msgObj);
+
+            });
 
         }
 

@@ -152,5 +152,12 @@
     "instruction": "Paste the Show_ID value from the marketplace URL into Field 1;\npaste your session cookie string into Field 2 if the show requires auth.",
     "inputType": "Show ID, Session Cookie (optional)",
     "category": "General"
+  },
+  {
+    "id": "eventscribe-general",
+    "name": "EventScribe (General)",
+    "instruction": "Paste the show's root domain (e.g.https://phccconnect2026.eventscribe.net)\n in Field 1, and your full browser cookie string in Field 2.",
+    "inputType": "Base URL, Cookie String",
+    "category": "General"
   }
 ]

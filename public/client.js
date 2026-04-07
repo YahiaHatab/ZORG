@@ -1264,7 +1264,7 @@ function renderOnlineUsers() {
     const currentIds = new Set();
     
     currentOnlineUsers.forEach(u => {
-        const isMe = u.id === window.zorgSocket.id;
+        const isMe = u.socketIds && u.socketIds.includes(window.zorgSocket.id);
         const initial = (u.name || "?").charAt(0).toUpperCase();
         const gradient = getAvatarGradient(u);
         const accent = getAvatarAccent(u);
@@ -1301,7 +1301,7 @@ function renderOnlineUsers() {
             ${unreadBadge}
         `;
 
-        const cardId = `user-card-${u.id}`;
+        const cardId = `user-card-${u.name.replace(/[^a-zA-Z0-9]/g, '_')}`;
         currentIds.add(cardId);
 
         let cardEl = document.getElementById(cardId);
@@ -1567,9 +1567,7 @@ function syncEngineUI() {
     const loader = document.getElementById('loader');
     if (loader && loader.style.display === 'flex') return;
 
-    const m = document.getElementById('mode').value;
-    const btn = document.getElementById('btn');
-    if (activeEnginesMap[m] && activeEnginesMap[m].socketId !== window.zorgSocket.id) {
+    if (activeEnginesMap[m] && activeEnginesMap[m].startedBy !== zUsername) {
         btn.disabled = true;
         btn.innerText = `IN USE BY ${activeEnginesMap[m].startedBy.toUpperCase()}`;
         btn.style.background = 'rgba(99,130,255,0.2)';
@@ -1591,7 +1589,7 @@ window.zorgSocket.on('engine-registry-update', (engines) => {
 
 window.zorgSocket.on('online-users', (users) => {
     currentOnlineUsers = users;
-    const me = users.find(u => u.id === window.zorgSocket.id);
+    const me = users.find(u => u.socketIds && u.socketIds.includes(window.zorgSocket.id));
     if (me && me.name) {
         zUsername = me.name;
         updateProfileUI();
