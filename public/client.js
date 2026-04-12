@@ -423,12 +423,7 @@ document.addEventListener('keydown', function(e) {
             return;
         }
 
-        // Chat Box
-        const chatBox = document.getElementById('chatBox');
-        if (chatBox?.style.display === 'flex') {
-            closeChat();
-            return;
-        }
+
     }
 
     // --- 2. COMMAND PALETTE ROUTING ---
@@ -471,9 +466,7 @@ document.addEventListener('keydown', function(e) {
         if (activeId === 'loginName') {
             e.preventDefault();
             handleLogin();
-        } else if (activeId === 'chatInput') {
-            e.preventDefault();
-            sendChatMessage();
+
         } else if (activeId === 'adminUpdateText') {
             e.preventDefault();
             broadcastUpdate();
@@ -1266,10 +1259,6 @@ function renderOnlineUsers() {
             viewingBadge = `<span style="font-family:'Space Mono',monospace;font-size:8px;color:${accent};opacity:0.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;margin-top:1px;">👁 ${u.viewing}</span>`;
         }
 
-        const scrapeCount = u.scrapeCount || 0;
-        const unreadCount = !isMe ? (unreadChatCounts[u.name] || 0) : 0;
-        const unreadBadge = unreadCount > 0 ? `<div class="unread-badge" style="position:absolute;top:6px;right:6px;min-width:16px;height:16px;background:var(--purple);border-radius:99px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;font-weight:700;color:#fff;padding:0 4px;pointer-events:none;">${unreadCount > 99 ? '99+' : unreadCount}</div>` : '';
-
         // The "New Inner Content" string
         const newInnerHtml = `
             ${isMe ? `<div class="user-avatar-wrap" onclick="openColorPicker(event)" title="Change your color" style="position:relative;cursor:pointer;"><div style="width:34px;height:34px;border-radius:9px;background:${gradient};border:1.5px solid ${accent}30;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:${accent};flex-shrink:0;transition:all 0.2s;">${initial}</div><div class="avatar-edit-hint">🎨</div></div>` 
@@ -1282,8 +1271,6 @@ function renderOnlineUsers() {
                 ${viewingBadge}
             </div>
             ${isMe ? `<button onclick="toggleStatusManual()" style="background:none;border:none;cursor:pointer;display:flex;padding:0;" title="Toggle Status"><div class="status-dot ${statusClass}" style="pointer-events:none;"></div></button>` : `<div class="status-dot ${statusClass}"></div>`}
-            <div class="user-tooltip">🔥 ${scrapeCount} scrape${scrapeCount !== 1 ? 's' : ''} today</div>
-            ${unreadBadge}
         `;
 
         const cardId = `user-card-${u.name.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -1295,7 +1282,6 @@ function renderOnlineUsers() {
             cardEl = document.createElement('div');
             cardEl.id = cardId;
             cardEl.className = `user-card ${isMe ? 'is-me' : ''}`;
-            if (!isMe) cardEl.onclick = () => setChatTarget(u.name);
             cardEl.style.cssText = `position:relative;${isMe ? `border-color:${accent}25;` : ''}`;
             cardEl.innerHTML = newInnerHtml;
             listEl.appendChild(cardEl);
@@ -1366,187 +1352,6 @@ function renderEngineActivity() {
     }, 1000);
 }
 
-let activeChatTargetName = null;
-const unreadChatCounts = {}; // { senderName: count }
-
-function incrementUnread(name) {
-    unreadChatCounts[name] = (unreadChatCounts[name] || 0) + 1;
-    updateUnreadBadge(name);
-}
-
-function clearUnread(name) {
-    if (!unreadChatCounts[name]) return;
-    delete unreadChatCounts[name];
-    updateUnreadBadge(name);
-}
-
-function updateUnreadBadge(name) {
-    // Find the user card by matching the name text — avoid full re-render
-    const cards = document.querySelectorAll('#onlineList .user-card:not(.is-me)');
-    cards.forEach(card => {
-        const nameEl = card.querySelector('div[style*="font-size:12px"]');
-        if (!nameEl) return;
-        const cardName = nameEl.innerText?.replace('(You)', '').trim();
-        if (cardName !== name) return;
-
-        let badge = card.querySelector('.unread-badge');
-        const count = unreadChatCounts[name] || 0;
-
-        if (count > 0) {
-            if (!badge) {
-                badge = document.createElement('div');
-                badge.className = 'unread-badge';
-                badge.style.cssText = 'position:absolute;top:6px;right:6px;min-width:16px;height:16px;background:var(--purple);border-radius:99px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;font-weight:700;color:#fff;padding:0 4px;pointer-events:none;animation:unreadPop 0.2s cubic-bezier(0.34,1.6,0.64,1);';
-                card.appendChild(badge);
-            }
-            badge.innerText = count > 99 ? '99+' : count;
-        } else {
-            if (badge) badge.remove();
-        }
-    });
-}
-
-window.setChatTarget = function (targetName) {
-    // Stop typing for previous chat if switching
-    if (activeChatTargetName && activeChatTargetName !== targetName) {
-        window.zorgSocket.emit('typing-stop', { targetName: activeChatTargetName });
-        clearTypingState();
-    }
-    activeChatTargetName = targetName;
-    clearUnread(targetName);
-    document.getElementById('chatTargetName').innerText = targetName;
-
-    const chatBox = document.getElementById('chatBox');
-    chatBox.style.display = 'flex';
-    // Reset typing indicator
-    const indicator = document.getElementById('typingIndicator');
-    if (indicator) indicator.style.display = 'none';
-
-    document.getElementById('chatMessages').innerHTML = '<div style="text-align:center;padding:20px;font-family:\'Space Mono\',monospace;font-size:10px;color:#3d4260;">Decrypting history...</div>';
-    window.zorgSocket.emit('request-chat-history', targetName);
-    setTimeout(() => document.getElementById('chatInput').focus(), 50);
-};
-
-function closeChat() {
-    if (activeChatTargetName) {
-        window.zorgSocket.emit('typing-stop', { targetName: activeChatTargetName });
-        clearTypingState();
-    }
-    activeChatTargetName = null;
-    document.getElementById('chatBox').style.display = 'none';
-}
-
-function sendChatMessage() {
-    if (!activeChatTargetName) return;
-    const input = document.getElementById('chatInput');
-    const msg = input.value.trim();
-    if (!msg) return;
-
-    window.zorgSocket.emit('send-private-msg', { targetName: activeChatTargetName, message: msg });
-    window.zorgSocket.emit('typing-stop', { targetName: activeChatTargetName });
-    input.value = '';
-    clearTypingState();
-}
-
-let typingTimer = null;
-function clearTypingState() {
-    clearTimeout(typingTimer);
-    typingTimer = null;
-}
-
-function handleChatInputTyping() {
-    if (!activeChatTargetName) return;
-    window.zorgSocket.emit('typing-start', { targetName: activeChatTargetName });
-    clearTypingState();
-    typingTimer = setTimeout(() => {
-        if (activeChatTargetName) window.zorgSocket.emit('typing-stop', { targetName: activeChatTargetName });
-    }, 2000);
-}
-
-// Typing indicator socket listeners
-window.zorgSocket.on('user-typing', ({ from }) => {
-    if (from !== activeChatTargetName) return;
-    const indicator = document.getElementById('typingIndicator');
-    if (indicator) indicator.style.display = 'flex';
-});
-
-window.zorgSocket.on('user-stopped-typing', ({ from }) => {
-    if (from !== activeChatTargetName) return;
-    const indicator = document.getElementById('typingIndicator');
-    if (indicator) indicator.style.display = 'none';
-});
-
-function renderMessageBubble(msgObj) {
-    const isMe = msgObj.from === zUsername;
-    const time = new Date(msgObj.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    // Get accent color for sender
-    const senderUser = currentOnlineUsers.find(u => u.name === msgObj.from);
-    const accent = senderUser ? getAvatarAccent(senderUser) : (isMe ? '#6382ff' : '#b97cf3');
-    const bubbleBg = isMe ? accent : 'var(--bg-raised)';
-
-    return `
-        <div style="display:flex;flex-direction:column;align-items:${isMe ? 'flex-end' : 'flex-start'};" class="fade-up">
-            <div class="bubble-meta ${isMe ? 'bubble-me-meta' : ''}" style="margin-bottom:3px;">
-                <span style="color:${accent};margin-right:4px;">${msgObj.from}</span>
-                <span>${time}</span>
-            </div>
-            <div style="background:${isMe ? bubbleBg : 'var(--bg-raised)'};color:${isMe ? '#fff' : 'var(--text-primary)'};border-radius:${isMe ? '12px 12px 2px 12px' : '12px 12px 12px 2px'};padding:8px 12px;font-size:12px;max-width:85%;${isMe ? '' : 'border:1px solid var(--border);'}line-height:1.5;word-break:break-word;">${msgObj.text}</div>
-        </div>
-    `;
-}
-
-window.zorgSocket.on('chat-history', (data) => {
-    if (data.targetName !== activeChatTargetName) return;
-    const container = document.getElementById('chatMessages');
-    if (data.history.length === 0) {
-        container.innerHTML = '<div style="text-align:center;padding:20px;font-family:\'Space Mono\',monospace;font-size:10px;color:#3d4260;font-style:italic;">No recorded transmissions.</div>';
-    } else {
-        container.innerHTML = data.history.map(renderMessageBubble).join('');
-        container.scrollTop = container.scrollHeight;
-    }
-});
-
-window.zorgSocket.on('receive-private-msg', (msgObj) => {
-    if (activeChatTargetName && (msgObj.from === activeChatTargetName || (msgObj.from === zUsername && msgObj.to === activeChatTargetName))) {
-        const container = document.getElementById('chatMessages');
-        if (container.innerHTML.includes('No recorded transmissions')) container.innerHTML = '';
-        container.insertAdjacentHTML('beforeend', renderMessageBubble(msgObj));
-        container.scrollTop = container.scrollHeight;
-    }
-
-    if (msgObj.from !== zUsername) {
-        try {
-            const AudioContextConfig = window.AudioContext || window.webkitAudioContext;
-            if (AudioContextConfig) {
-                const ctx = new AudioContextConfig();
-                const osc = ctx.createOscillator();
-                const gainNode = ctx.createGain();
-                osc.connect(gainNode); gainNode.connect(ctx.destination);
-                osc.type = 'sine'; osc.frequency.setValueAtTime(800, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
-                gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
-                osc.start(); osc.stop(ctx.currentTime + 0.5);
-            }
-        } catch (e) { }
-
-        const safeName = msgObj.from.replace(/'/g, "\\'");
-
-        if (activeChatTargetName !== msgObj.from) {
-            incrementUnread(msgObj.from);
-            showToast(`<span style="color:#7c82a0;font-size:10px;font-family:'Space Mono',monospace;display:block;margin-bottom:3px;">From ${msgObj.from} · click to open</span>${msgObj.text}`, 'whisper', `setChatTarget('${safeName}')`);
-            addNotification(`Message: ${msgObj.from}`, msgObj.text, false);
-        }
-
-        if (document.visibilityState === 'hidden' && "Notification" in window && Notification.permission === "granted") {
-            const notification = new Notification("ZORG-Ω", {
-                body: `${msgObj.from}: ${msgObj.text}`, icon: '/Icons/favicon.ico'
-            });
-            notification.onclick = function () { window.focus(); setChatTarget(safeName); this.close(); };
-        }
-    }
-});
 
 function syncEngineUI() {
     const loader = document.getElementById('loader');
