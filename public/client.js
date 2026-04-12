@@ -133,22 +133,7 @@ function extractEnginesFromHTML() {
         if (id && displayName) engines.push({ id, name: displayName, category, isCustom, hasEdit, hasDelete });
     });
 
-    // Built-in fallback — check each one against the server HTML too
-    const builtinDefs = [
-        { id: 'marketplace', name: 'Map-Dynamics (Marketplace)', category: 'General', isCustom: false },
-        { id: 'dusseldorf',  name: 'Messe Düsseldorf',            category: 'General', isCustom: false },
-        { id: 'algolia',     name: 'NürnbergMesse (Algolia)',     category: 'General', isCustom: false },
-        { id: 'informa',     name: 'Informa Markets (cURL)',      category: 'General', isCustom: false },
-        { id: 'eshow',       name: 'eShow (Concurrent)',          category: 'General', isCustom: false },
-        { id: 'cadmium',     name: 'Cadmium (Harvester)',         category: 'General', isCustom: false },
-    ];
-    builtinDefs.forEach(b => {
-        if (!engines.find(e => e.id === b.id)) {
-            const serverEl = document.querySelector(`#engineListContainer .dropdown-engine-item[onclick*="'${b.id}'"]`);
-            const ab = serverEl?.querySelector('.action-btns');
-            engines.unshift({ ...b, hasEdit: !!ab?.querySelector('[title="Edit"]'), hasDelete: !!ab?.querySelector('[title="Delete"]') });
-        }
-    });
+    // Built-in fallback has been removed to respect deleted engines
 
     return engines;
 }
@@ -1567,7 +1552,11 @@ function syncEngineUI() {
     const loader = document.getElementById('loader');
     if (loader && loader.style.display === 'flex') return;
 
-    if (activeEnginesMap[m] && activeEnginesMap[m].startedBy !== zUsername) {
+    const m = document.getElementById('mode')?.value;
+    const btn = document.getElementById('btn');
+    if (!m || !btn) return;
+
+    if (activeEnginesMap && activeEnginesMap[m] && activeEnginesMap[m].startedBy !== zUsername) {
         btn.disabled = true;
         btn.innerText = `IN USE BY ${activeEnginesMap[m].startedBy.toUpperCase()}`;
         btn.style.background = 'rgba(99,130,255,0.2)';
