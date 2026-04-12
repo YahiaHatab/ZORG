@@ -1,5 +1,5 @@
 /* ============================================
-   ZORG-Ω Architect — Design System v6.0
+   ZORG-Î© Architect â Design System v6.0
    ============================================ */
 
 /* Scrollbar reset for all themed scroll areas */
@@ -596,7 +596,7 @@ body.modal-open {
 .user-card:hover .ban-btn { opacity: 1 !important; }
 
 /* ============================================
-   PORTAL-READY — Nexus 500px Window Mode
+   PORTAL-READY â Nexus 500px Window Mode
    @media (max-width: 600px)
    ============================================ */
 
@@ -753,10 +753,10 @@ aside#noticeBoard {
 
 
 /* ============================================
-   LIQUID LAYOUT � Fluid & Fully Resizable
+   LIQUID LAYOUT  Fluid & Fully Resizable
    ============================================ */
 
-/* 1. "Fill the Frame" � Ghost margin elimination */
+/* 1. "Fill the Frame"  Ghost margin elimination */
 html,
 body {
     margin: 0;
@@ -820,9 +820,8 @@ main {
 #telemetry {
     width: 100% !important;
     box-sizing: border-box !important;
-    min-height: 200px;
-    height: auto !important;
-    flex-grow: 1;
+    height: 140px !important;
+    overflow-y: auto !important;
 }
 
 #telemetryBox {
@@ -863,12 +862,12 @@ main {
     transition: background 0.15s;
 }
 
-/* Vertical (column) handles � sit between grid columns */
+/* Vertical (column) handles  sit between grid columns */
 .resize-handle--v {
     width: 5px;
     cursor: col-resize;
     background: transparent;
-    /* Pull handles out of normal flow � they live IN the grid */
+    /* Pull handles out of normal flow  they live IN the grid */
     align-self: stretch;
 }
 
@@ -892,7 +891,7 @@ main {
     box-shadow: 0 0 8px rgba(99, 130, 255, 0.3);
 }
 
-/* Horizontal (row) handle � sits above telemetry */
+/* Horizontal (row) handle  sits above telemetry */
 .resize-handle--h {
     width: 100%;
     height: 8px;
@@ -934,7 +933,7 @@ main {
 }
 
 /* ============================================
-   RESIZE ENGINE � CSS custom property defaults
+   RESIZE ENGINE  CSS custom property defaults
    ============================================ */
 :root {
     --col-left: 280px;
@@ -963,12 +962,12 @@ main {
 }
 
 /* ============================================
-   PROGRESSIVE COLLAPSE � Fluid Breakpoints
+   PROGRESSIVE COLLAPSE  Fluid Breakpoints
    Fix: sidebars crushing main content when
    window is smaller than sidebar widths sum.
    ============================================ */
 
-/* -- Breakpoint 1: ~1080px � Drop RIGHT sidebar -- */
+/* -- Breakpoint 1: ~1080px  Drop RIGHT sidebar -- */
 @media (max-width: 1080px) {
     #mainGrid {
         grid-template-columns: var(--col-left, 280px) 5px 1fr !important;
@@ -982,7 +981,7 @@ main {
     }
 }
 
-/* -- Breakpoint 2: ~760px � Drop BOTH sidebars -- */
+/* -- Breakpoint 2: ~760px  Drop BOTH sidebars -- */
 @media (max-width: 760px) {
     #mainGrid {
         grid-template-columns: 1fr !important;
@@ -997,7 +996,7 @@ main {
     }
 }
 
-/* -- Breakpoint 3: ~520px � Compact mobile -- */
+/* -- Breakpoint 3: ~520px  Compact mobile -- */
 @media (max-width: 520px) {
     main {
         padding: 1rem 0.75rem !important;
